@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Individual Shareholders - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="mb-0">Individual Shareholders</h1>
+                <div class="d-flex gap-2">
+                    <span id="totalHolders" class="badge bg-secondary">Loading...</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Top Individual Shareholders (自然人)</h5>
+                    <small class="text-light">Showing shareholders who own stocks in multiple companies</small>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="holdersTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Shareholder Name</th>
+                                    <th>Ticker Count</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="holdersTableBody">
+                                <tr>
+                                    <td colspan="4" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Statistics</h6>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Total Individual Shareholders:</strong> <span id="holderCount">-</span></p>
+                            <p><strong>Last Updated:</strong> <span id="lastUpdate">-</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Quick Actions</h6>
+                        </div>
+                        <div class="card-body">
+                            <a href="/tickers" class="btn btn-outline-primary btn-sm">Browse All Tickers</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load individual shareholders on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadIndividualHolders();
+    loadStats();
+});
+
+function loadIndividualHolders() {
+    fetch('/api/holders')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayIndividualHolders(data.data);
+                document.getElementById('totalHolders').textContent = `${data.count} shareholders`;
+            } else {
+                showError('Failed to load shareholders: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load shareholders');
+        });
+}
+
+function displayIndividualHolders(holders) {
+    const tbody = document.getElementById('holdersTableBody');
+    
+    if (holders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center">No individual shareholders found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = holders.map((holder, index) => `
+        <tr>
+            <td><span class="badge bg-primary">${index + 1}</span></td>
+            <td>${holder.holder_name}</td>
+            <td>
+                <span class="badge bg-info">${holder.ticker_count}</span>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewHolderDetails('${encodeURIComponent(holder.holder_name)}')">
+                    View Holdings
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function viewHolderDetails(holderName) {
+    window.location.href = `/holder/${encodeURIComponent(holderName)}`;
+}
+
+function loadStats() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const holdersUpdate = data.data.holders.last_update_date || 'Never';
+                document.getElementById('lastUpdate').textContent = holdersUpdate;
+                document.getElementById('holderCount').textContent = 'Ready';
+            }
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('holdersTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}

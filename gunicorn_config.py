@@ -1,0 +1,14 @@
+bind = "127.0.0.1:5003"
+workers = 3
+worker_class = "sync"
+worker_connections = 1000
+max_requests = 1000
+max_requests_jitter = 50
+timeout = 30
+keepalive = 2
+preload_app = True
+user = "www-data"
+group = "www-data"
+accesslog = "/var/www/insightofstock/logs/gunicorn_access.log"
+errorlog = "/var/www/insightofstock/logs/gunicorn_error.log"
+loglevel = "info"

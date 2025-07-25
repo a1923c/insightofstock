@@ -1,0 +1,21 @@
+Develop one web application:
+
+Web interface
+Show the ticker’s name, shares holders, percentage of shares hold, holder’s name. Those holders are private holders which listed out in the top 10 holder’s of each ticker.  
+The user can click the ticker’s name to show top 10 holder’s info regarding this ticker.
+
+
+Backend:
+
+Follow the doc at https://tushare.pro/document/2?doc_id=62 to retrieve Top 10 holder’s. I will manually input the tushare token in the .env file.
+Ticker’s name can be retrieved based on https://tushare.pro/document/2?doc_id=25
+Create tables to store above info.
+Each table will have updated_date col to indicate the date when the data was pulled and updated.
+Using cron job to pull and update data daily e.g. 8:00 AM. 
+
+
+Based on the above, first have technical design doc generated. Then based on the TD to breakdown them into detailed implementation steps. Then according those steps to do the development.
+
+You can use python and flask for this project. As for the database, pls choose the one you think is suitable. Ensure all development should be done in virtual env.
+
+I already create one repo on GitHub. Please make sure to save all your products into this repo at https://github.com/a1923c/insightofstock.git.

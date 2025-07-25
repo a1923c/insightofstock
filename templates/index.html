@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Top Shareholders - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Top Individual Shareholders</h1>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+                    <h5 class="mb-0">Individual Shareholders</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="updateInfo" class="text-muted small">Loading...</div>
+                        <button class="btn btn-primary btn-sm" onclick="updateData()">
+                            <span class="spinner-border spinner-border-sm d-none" id="updateSpinner"></span>
+                            Update Data
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="holdersTable">
+                            <thead>
+                                <tr>
+                                    <th>Shareholder Name</th>
+                                    <th>Number of Tickers</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="holdersTableBody">
+                                <tr>
+                                    <td colspan="3" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal fade" id="updateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Data Update</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="updateStatus"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load holders on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadHolders();
+    loadUpdateInfo();
+});
+
+function loadHolders() {
+    fetch('/api/holders')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayHolders(data.data);
+            } else {
+                showError('Failed to load holders: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load holders');
+        });
+}
+
+function displayHolders(holders) {
+    const tbody = document.getElementById('holdersTableBody');
+    
+    if (holders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center">No holders found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = holders.map(holder => `
+        <tr>
+            <td>${holder.holder_name}</td>
+            <td>
+                <span class="badge bg-primary">${holder.ticker_count}</span>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewHolderDetails('${holder.holder_name}')">
+                    View Details
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function viewHolderDetails(holderName) {
+    window.location.href = `/holder/${encodeURIComponent(holderName)}`;
+}
+
+function loadUpdateInfo() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const info = data.data;
+                const holdersUpdate = info.holders.last_update_date || 'Never';
+                document.getElementById('updateInfo').textContent = 
+                    `Last updated: ${holdersUpdate}`;
+            }
+        });
+}
+
+function updateData() {
+    const spinner = document.getElementById('updateSpinner');
+    const modal = new bootstrap.Modal(document.getElementById('updateModal'));
+    const statusDiv = document.getElementById('updateStatus');
+    
+    spinner.classList.remove('d-none');
+    statusDiv.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Updating data...</p></div>';
+    
+    modal.show();
+    
+    fetch('/api/update-data', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+                setTimeout(() => {
+                    modal.hide();
+                    loadTickers(); // Reload the data
+                }, 2000);
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            statusDiv.innerHTML = '<div class="alert alert-danger">Failed to update data: ' + error.message + '</div>';
+        })
+        .finally(() => {
+            spinner.classList.add('d-none');
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('holdersTableBody');
+    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}
