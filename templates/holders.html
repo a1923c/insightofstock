@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Top Shareholders - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+                    <li class="breadcrumb-item active">Shareholders</li>
+                </ol>
+            </nav>
+            
+            <h1 class="mb-4">Top Individual Shareholders</h1>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+                    <h5 class="mb-0">Individual Shareholders</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="updateInfo" class="text-muted small">Loading...</div>
+                        <button class="btn btn-primary btn-sm" onclick="updateData()">
+                            <span class="spinner-border spinner-border-sm d-none" id="updateSpinner"></span>
+                            Update Data
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <label for="perPageSelect" class="form-label">Items per page:</label>
+                            <select class="form-select form-select-sm" id="perPageSelect" style="width: auto; display: inline-block;" onchange="changePerPage()">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="minTickersSelect" class="form-label">Min Tickers:</label>
+                            <select class="form-select form-select-sm" id="minTickersSelect" style="width: auto; display: inline-block;" onchange="changeMinTickers()">
+                                <option value="2" selected>2</option>
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="holdersTable">
+                            <thead>
+                                <tr>
+                                    <th>Shareholder Name</th>
+                                    <th>Number of Tickers</th>
+                                </tr>
+                            </thead>
+                            <tbody id="holdersTableBody">
+                                <tr>
+                                    <td colspan="3" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Shareholder pagination">
+                        <ul class="pagination justify-content-center" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal fade" id="updateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Data Update</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="updateStatus"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load holders on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadHolders();
+    loadUpdateInfo();
+});
+
+let currentPage = 1;
+let currentPerPage = 50;
+let currentMinTickers = 2;
+
+function loadHolders() {
+    const tbody = document.getElementById('holdersTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="3" class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+
+    const params = new URLSearchParams({
+        page: currentPage,
+        per_page: currentPerPage,
+        min_tickers: currentMinTickers
+    });
+
+    fetch(`/api/holders?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayHolders(data.data, data.pagination);
+            } else {
+                showError('Failed to load holders: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load holders');
+        });
+}
+
+function displayHolders(holders, pagination) {
+    const tbody = document.getElementById('holdersTableBody');
+    
+    if (holders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center">No holders found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = holders.map(holder => `
+        <tr>
+            <td>${holder.holder_name}</td>
+            <td>
+                <button class="btn btn-link p-0" onclick="viewHolderDetails('${holder.holder_name}')">
+                    <span class="badge bg-primary">${holder.ticker_count}</span>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    
+    displayPagination(pagination);
+}
+
+function displayPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    if (!paginationDiv) return;
+    
+    const { page, total_pages } = pagination;
+    let html = '';
+    
+    // Previous button
+    html += `
+        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page - 1})">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(total_pages, page + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${total_pages})">${total_pages}</a></li>`;
+    }
+    
+    // Next button
+    html += `
+        <li class="page-item ${page === total_pages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page + 1})">Next</a>
+        </li>
+    `;
+    
+    paginationDiv.innerHTML = html;
+}
+
+function changePage(newPage) {
+    if (newPage < 1) return;
+    currentPage = newPage;
+    loadHolders();
+}
+
+function changePerPage() {
+    const select = document.getElementById('perPageSelect');
+    currentPerPage = parseInt(select.value);
+    currentPage = 1;
+    loadHolders();
+}
+
+function changeMinTickers() {
+    const select = document.getElementById('minTickersSelect');
+    currentMinTickers = parseInt(select.value);
+    currentPage = 1;
+    loadHolders();
+}
+
+function viewHolderDetails(holderName) {
+    window.location.href = `/holder/${encodeURIComponent(holderName)}`;
+}
+
+function loadUpdateInfo() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const info = data.data;
+                const holdersUpdate = info.holders.last_update_date || 'Never';
+                document.getElementById('updateInfo').textContent = 
+                    `Last updated: ${holdersUpdate}`;
+            }
+        });
+}
+
+function updateData() {
+    const spinner = document.getElementById('updateSpinner');
+    const modal = new bootstrap.Modal(document.getElementById('updateModal'));
+    const statusDiv = document.getElementById('updateStatus');
+    
+    spinner.classList.remove('d-none');
+    statusDiv.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Updating data...</p></div>';
+    
+    modal.show();
+    
+    fetch('/api/update-data', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+                setTimeout(() => {
+                    modal.hide();
+                    loadHolders(); // Reload the data
+                }, 2000);
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            statusDiv.innerHTML = '<div class="alert alert-danger">Failed to update data: ' + error.message + '</div>';
+        })
+        .finally(() => {
+            spinner.classList.add('d-none');
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('holdersTableBody');
+    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}

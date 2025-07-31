@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Market Players - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+                    <li class="breadcrumb-item active">Market Players</li>
+                </ol>
+            </nav>
+            
+            <h1 class="mb-4">Market Players (游资)</h1>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+                    <h5 class="mb-0">Market Players</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="updateInfo" class="text-muted small">Loading...</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <label for="perPageSelect" class="form-label">Items per page:</label>
+                            <select class="form-select form-select-sm" id="perPageSelect" style="width: auto; display: inline-block;" onchange="changePerPage()">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="playersTable">
+                            <thead>
+                                <tr>
+                                    <th>Player Code</th>
+                                    <th>Player Name</th>
+                                    <th>Transaction Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="playersTableBody">
+                                <tr>
+                                    <td colspan="4" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Player pagination">
+                        <ul class="pagination justify-content-center" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load players on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlayers();
+    loadUpdateInfo();
+});
+
+let currentPage = 1;
+let currentPerPage = 50;
+
+function loadPlayers() {
+    const tbody = document.getElementById('playersTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="4" class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+
+    const params = new URLSearchParams({
+        page: currentPage,
+        per_page: currentPerPage
+    });
+
+    fetch(`/api/players?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayPlayers(data.data, data.pagination);
+            } else {
+                showError('Failed to load players: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load players');
+        });
+}
+
+function displayPlayers(players, pagination) {
+    const tbody = document.getElementById('playersTableBody');
+    
+    if (players.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center">No players found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = players.map(player => `
+        <tr>
+            <td><strong>${player.code}</strong></td>
+            <td><strong>${player.name}</strong></td>
+            <td>
+                <button class="btn btn-link p-0" onclick="viewPlayerDetails('${player.code}')">
+                    <span class="badge bg-primary">${player.transaction_count}</span>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    
+    displayPagination(pagination);
+}
+
+function displayPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    if (!paginationDiv) return;
+    
+    const { page, total_pages } = pagination;
+    let html = '';
+    
+    // Previous button
+    html += `
+        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page - 1})">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(total_pages, page + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${total_pages})">${total_pages}</a></li>`;
+    }
+    
+    // Next button
+    html += `
+        <li class="page-item ${page === total_pages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page + 1})">Next</a>
+        </li>
+    `;
+    
+    paginationDiv.innerHTML = html;
+}
+
+function changePage(newPage) {
+    if (newPage < 1) return;
+    currentPage = newPage;
+    loadPlayers();
+}
+
+function changePerPage() {
+    const select = document.getElementById('perPageSelect');
+    currentPerPage = parseInt(select.value);
+    currentPage = 1;
+    loadPlayers();
+}
+
+function viewPlayerDetails(playerCode) {
+    window.location.href = `/player/${encodeURIComponent(playerCode)}`;
+}
+
+function loadUpdateInfo() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const info = data.data;
+                const playersUpdate = info.players.last_update_date || 'Never';
+                document.getElementById('updateInfo').textContent = 
+                    `Last updated: ${playersUpdate}`;
+            }
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('playersTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}

@@ -1,6 +1,7 @@
 from models import get_session, Ticker, TopHolder, UpdateLog
 from services.tushare_service import TushareService
 from datetime import datetime
+from sqlalchemy import or_
 
 class DataService:
     def __init__(self):
@@ -183,7 +184,7 @@ class DataService:
         except Exception as e:
             return []
     
-    def get_ticker_holders(self, ts_code):
+    def get_ticker_holders(self, ts_code, individual_only=False):
         """Get top holders for a specific ticker using latest date"""
         try:
             ticker = self.session.query(Ticker).filter_by(ts_code=ts_code).first()
@@ -195,21 +196,59 @@ class DataService:
             if not latest_date:
                 return None, "No holder data available"
             
-            holders = []
-            for holder in self.session.query(TopHolder).filter_by(
+            # Build query
+            query = self.session.query(TopHolder).filter_by(
                 ts_code=ticker.ts_code, 
                 end_date=latest_date
-            ).order_by(TopHolder.hold_ratio.desc()).all():
-                holders.append({
-                    'ann_date': holder.ann_date,
-                    'end_date': holder.end_date,
-                    'holder_name': holder.holder_name,
-                    'hold_amount': holder.hold_amount,
-                    'hold_ratio': holder.hold_ratio,
-                    'holder_type': holder.holder_type,
-                    'hold_change': holder.hold_change,
-                    'updated_date': holder.updated_date.strftime('%Y-%m-%d %H:%M:%S') if holder.updated_date else None
-                })
+            )
+            
+            # Filter for individual holders if requested
+            if individual_only:
+                # First try to get individual holders with a broader filter
+                # Include records where holder_type is null/empty (assume individual) or matches individual types
+                individual_query = query.filter(
+                    or_(
+                        TopHolder.holder_type == None,
+                        TopHolder.holder_type == '',
+                        TopHolder.holder_type.in_(['个人', 'G', '自然人', '个人股东'])
+                    )
+                )
+                holders = []
+                for holder in individual_query.order_by(TopHolder.hold_ratio.desc()).all():
+                    holders.append({
+                        'ann_date': holder.ann_date,
+                        'end_date': holder.end_date,
+                        'holder_name': holder.holder_name,
+                        'hold_amount': holder.hold_amount,
+                        'hold_ratio': holder.hold_ratio,
+                        'holder_type': holder.holder_type,
+                        'hold_change': holder.hold_change,
+                        'updated_date': holder.updated_date.strftime('%Y-%m-%d %H:%M:%S') if holder.updated_date else None
+                    })
+                
+                # If no individual holders found, return all holders (fallback)
+                if len(holders) == 0:
+                    print(f"No individual holders found for {ts_code}, returning all holders")
+                    query = self.session.query(TopHolder).filter_by(
+                        ts_code=ticker.ts_code, 
+                        end_date=latest_date
+                    )
+            else:
+                holders = []
+            
+            # If we haven't populated holders yet (either not individual_only or fallback)
+            if len(holders) == 0:
+                for holder in query.order_by(TopHolder.hold_ratio.desc()).all():
+                    holders.append({
+                        'ann_date': holder.ann_date,
+                        'end_date': holder.end_date,
+                        'holder_name': holder.holder_name,
+                        'hold_amount': holder.hold_amount,
+                        'hold_ratio': holder.hold_ratio,
+                        'holder_type': holder.holder_type,
+                        'hold_change': holder.hold_change,
+                        'updated_date': holder.updated_date.strftime('%Y-%m-%d %H:%M:%S') if holder.updated_date else None
+                    })
             
             ticker_info = {
                 'ts_code': ticker.ts_code,

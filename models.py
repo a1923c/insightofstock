@@ -82,6 +82,7 @@ def create_tables():
             FROM top_holders 
             WHERE holder_type = '自然人' 
             GROUP BY holder_name
+            HAVING ticker_count>=2 
             ORDER BY ticker_count DESC
         """))
         
@@ -89,24 +90,13 @@ def create_tables():
         conn.execute(text("""
             CREATE VIEW IF NOT EXISTS tickers_with_multiple_holders AS
             SELECT 
-                t.ts_code,
-                t.symbol,
-                t.name,
-                t.area,
-                t.industry,
-                t.list_date,
-                COUNT(DISTINCT h.holder_name) as holder_count,
-                MAX(h.end_date) as latest_holder_date
-            FROM tickers t
-            JOIN top_holders h ON t.ts_code = h.ts_code
-            WHERE h.end_date = (
-                SELECT MAX(end_date) 
-                FROM top_holders 
-                WHERE ts_code = t.ts_code
-            ) AND h.holder_type = '自然人'
-            GROUP BY t.ts_code, t.symbol, t.name, t.area, t.industry, t.list_date
-            HAVING COUNT(DISTINCT h.holder_name) >= 2
-            ORDER BY holder_count DESC, t.name ASC
+                ts_code, 
+                COUNT(DISTINCT holder_name) as holder_count 
+            FROM top_holders 
+            WHERE holder_type = '自然人' 
+            GROUP BY ts_code
+            HAVING holder_count>=2 
+            ORDER BY holder_count DESC
         """))
         conn.commit()
     

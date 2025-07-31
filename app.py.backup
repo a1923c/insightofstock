@@ -1,0 +1,1185 @@
+from flask import Flask, render_template, jsonify, request
+from services.data_service import DataService
+from models import create_tables, MarketPlayer
+import os
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
+
+load_dotenv()
+
+app = Flask(__name__)
+
+# Handle subdirectory deployment
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Initialize database
+create_tables()
+
+@app.route('/')
+def home():
+    """Home page with links to both views"""
+    return render_template('home.html')
+
+@app.route('/holders')
+def holders():
+    """Page showing individual shareholders with pagination"""
+    return render_template('holders.html')
+
+@app.route('/tickers')
+def tickers():
+    """Page showing tickers with pagination"""
+    return render_template('tickers.html')
+
+@app.route('/players')
+def players():
+    """Page showing market players with pagination"""
+    return render_template('players.html')
+
+@app.route('/recent-activities')
+def recent_activities():
+    """Page showing recent market player activities"""
+    return render_template('recent_activities.html')
+
+@app.route('/ticker/<ts_code>')
+def ticker_detail(ts_code):
+    """Ticker detail page showing holders"""
+    return render_template('ticker_detail.html', ts_code=ts_code)
+
+@app.route('/player/<player_code>')
+def player_detail(player_code):
+    """Player detail page showing transactions"""
+    return render_template('player_detail.html', player_code=player_code)
+
+@app.route('/recent-activity/<player_code>')
+def recent_activity_detail(player_code):
+    """Recent activity detail page showing transactions in the last 30 days"""
+    return render_template('recent_activity_detail.html', player_code=player_code)
+
+# API Endpoints
+@app.route('/api/tickers')
+def api_tickers():
+    """Get tickers with holder count, optionally filtered by multiple holders"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        multiple_holders = request.args.get('multiple_holders', 'false').lower() == 'true'
+        min_holders = int(request.args.get('min_holders', 2))
+        
+        from sqlalchemy import text
+        
+        if multiple_holders:
+            # Use the new view for tickers with multiple holders
+            query = text("""
+                SELECT 
+                    ts_code,
+                    symbol,
+                    name,
+                    area,
+                    industry,
+                    list_date,
+                    holder_count,
+                    latest_holder_date
+                FROM tickers_with_multiple_holders
+                WHERE holder_count >= :min_holders
+                ORDER BY holder_count DESC, name ASC
+                LIMIT :limit OFFSET :offset
+            """)
+            
+            count_query = text("""
+                SELECT COUNT(*) 
+                FROM tickers_with_multiple_holders
+                WHERE holder_count >= :min_holders
+            """)
+        else:
+            # Original query for all tickers
+            query = text("""
+                SELECT 
+                    t.ts_code,
+                    t.symbol,
+                    t.name,
+                    t.area,
+                    t.industry,
+                    t.list_date,
+                    COUNT(DISTINCT h.holder_name) as holder_count,
+                    MAX(h.end_date) as latest_holder_date
+                FROM tickers t
+                LEFT JOIN top_holders h ON t.ts_code = h.ts_code 
+                    AND h.end_date = (
+                        SELECT MAX(end_date) 
+                        FROM top_holders 
+                        WHERE ts_code = t.ts_code
+                    )
+                GROUP BY t.ts_code, t.symbol, t.name, t.area, t.industry, t.list_date
+                ORDER BY holder_count DESC, t.name ASC
+                LIMIT :limit OFFSET :offset
+            """)
+            
+            count_query = text("SELECT COUNT(*) FROM tickers")
+        
+        offset = (page - 1) * per_page
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'min_holders': min_holders,
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        tickers = []
+        for row in result:
+            tickers.append({
+                'ts_code': row[0],
+                'symbol': row[1] or '-',
+                'name': row[2],
+                'area': row[3] or '',
+                'industry': row[4] or '',
+                'list_date': row[5],
+                'holder_count': row[6] or 0,
+                'latest_holder_date': row[7]
+            })
+        
+        # Get total count for pagination
+        if multiple_holders:
+            total_count = service.session.execute(count_query, {'min_holders': min_holders}).scalar()
+        else:
+            total_count = service.session.execute(count_query).scalar()
+        
+        update_info = service.get_latest_update_info()
+        
+        return jsonify({
+            'success': True,
+            'data': tickers,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            },
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/tickers/<ts_code>/holders')
+def api_ticker_holders(ts_code):
+    """Get top 10 holders for a specific ticker"""
+    service = DataService()
+    try:
+        ticker_info, error = service.get_ticker_holders(ts_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': ticker_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/update-data', methods=['POST'])
+def api_update_data():
+    """Manual trigger for data update"""
+    service = DataService()
+    try:
+        success, message = service.update_all_data()
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/holders')
+def api_holders():
+    """Get individual shareholders with ticker count using the database view with pagination"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        min_tickers = int(request.args.get('min_tickers', 2))
+        
+        offset = (page - 1) * per_page
+        
+        from sqlalchemy import text
+        
+        # Main query with pagination
+        query = text("""
+            SELECT holder_name, ticker_count
+            FROM individual_holder_tickers
+            WHERE ticker_count >= :min_tickers
+            ORDER BY ticker_count DESC, holder_name ASC
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        # Count query for pagination
+        count_query = text("""
+            SELECT COUNT(*) 
+            FROM individual_holder_tickers
+            WHERE ticker_count >= :min_tickers
+        """)
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'min_tickers': min_tickers,
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        holders = []
+        for row in result:
+            holders.append({
+                'holder_name': row[0],
+                'ticker_count': row[1]
+            })
+        
+        # Get total count for pagination
+        total_count = service.session.execute(count_query, {'min_tickers': min_tickers}).scalar()
+        
+        return jsonify({
+            'success': True,
+            'data': holders,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/holder/<path:holder_name>')
+def holder_detail(holder_name):
+    """Holder detail page showing all tickers owned"""
+    return render_template('holder_detail.html', holder_name=holder_name)
+
+@app.route('/api/holders/<path:holder_name>/tickers')
+def api_holder_tickers(holder_name):
+    """Get all tickers and holdings for a specific holder"""
+    service = DataService()
+    try:
+        from sqlalchemy import text
+        
+        query = text("""
+            SELECT 
+                t.ts_code,
+                t.symbol,
+                t.name,
+                h.hold_amount,
+                h.hold_ratio,
+                h.hold_change,
+                h.end_date
+            FROM top_holders h
+            JOIN tickers t ON h.ts_code = t.ts_code
+            WHERE h.holder_name = :holder_name
+            ORDER BY h.hold_ratio DESC
+        """)
+        
+        result = service.session.execute(query, {'holder_name': holder_name})
+        tickers = []
+        for row in result:
+            tickers.append({
+                'ts_code': row[0],
+                'symbol': row[1] or '-',
+                'name': row[2],
+                'hold_amount': row[3],
+                'hold_ratio': row[4],
+                'hold_change': row[5],
+                'end_date': row[6]
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'holder_name': holder_name,
+                'tickers': tickers
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/players')
+def api_players():
+    """Get market players with transaction count"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        offset = (page - 1) * per_page
+        
+        from sqlalchemy import text
+        
+        # Main query with pagination
+        query = text("""
+            SELECT 
+                code,
+                name,
+                (SELECT COUNT(*) FROM player_transactions WHERE player_code = mp.code) as transaction_count
+            FROM market_players mp
+            ORDER BY name
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        # Count query for pagination
+        count_query = text("SELECT COUNT(*) FROM market_players")
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        players = []
+        for row in result:
+            players.append({
+                'code': row[0],
+                'name': row[1],
+                'transaction_count': row[2]
+            })
+        
+        # Get total count for pagination
+        total_count = service.session.execute(count_query).scalar()
+        
+        return jsonify({
+            'success': True,
+            'data': players,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/players/<player_code>/transactions')
+def api_player_transactions(player_code):
+    """Get all transactions for a specific market player"""
+    service = DataService()
+    try:
+        player_info, error = service.get_player_transactions(player_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': player_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/recent-activities')
+def api_recent_activities():
+    """Get market players with recent activities in the last 30 days"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        offset = (page - 1) * per_page
+        
+        from sqlalchemy import text
+        
+        # Calculate date 30 days ago
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+        
+        # Main query with pagination
+        query = text("""
+            SELECT 
+                mp.code,
+                mp.name,
+                COUNT(pt.id) as recent_transaction_count
+            FROM market_players mp
+            JOIN player_transactions pt ON mp.code = pt.player_code
+            WHERE pt.trade_date >= :thirty_days_ago
+            GROUP BY mp.code, mp.name
+            ORDER BY recent_transaction_count DESC, mp.name
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        # Count query for pagination
+        count_query = text("""
+            SELECT COUNT(DISTINCT mp.code)
+            FROM market_players mp
+            JOIN player_transactions pt ON mp.code = pt.player_code
+            WHERE pt.trade_date >= :thirty_days_ago
+        """)
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'thirty_days_ago': thirty_days_ago,
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        players = []
+        for row in result:
+            players.append({
+                'code': row[0],
+                'name': row[1],
+                'recent_transaction_count': row[2]
+            })
+        
+        # Get total count for pagination
+        total_count = service.session.execute(count_query, {'thirty_days_ago': thirty_days_ago}).scalar()
+        
+        return jsonify({
+            'success': True,
+            'data': players,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+from flask import Flask, render_template, jsonify, request
+from services.data_service import DataService
+from models import create_tables, MarketPlayer
+import os
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
+
+load_dotenv()
+
+app = Flask(__name__)
+
+# Handle subdirectory deployment
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Initialize database
+create_tables()
+
+@app.route('/')
+def home():
+    """Home page with links to both views"""
+    return render_template('home.html')
+
+@app.route('/holders')
+def holders():
+    """Page showing individual shareholders with pagination"""
+    return render_template('holders.html')
+
+@app.route('/tickers')
+def tickers():
+    """Page showing tickers with pagination"""
+    return render_template('tickers.html')
+
+@app.route('/players')
+def players():
+    """Page showing market players with pagination"""
+    return render_template('players.html')
+
+@app.route('/recent-activities')
+def recent_activities():
+    """Page showing recent market player activities"""
+    return render_template('recent_activities.html')
+
+@app.route('/financial-reports')
+def financial_reports():
+    """Page showing financial reports with tabs for Balance Sheet, Income Statement, and Cash Flow"""
+    return render_template('financial_reports.html')
+
+@app.route('/ticker/<ts_code>')
+def ticker_detail(ts_code):
+    """Ticker detail page showing holders"""
+    return render_template('ticker_detail.html', ts_code=ts_code)
+
+@app.route('/player/<player_code>')
+def player_detail(player_code):
+    """Player detail page showing transactions"""
+    return render_template('player_detail.html', player_code=player_code)
+
+@app.route('/recent-activity/<player_code>')
+def recent_activity_detail(player_code):
+    """Recent activity detail page showing transactions in the last 30 days"""
+    return render_template('recent_activity_detail.html', player_code=player_code)
+
+# API Endpoints
+@app.route('/api/tickers')
+def api_tickers():
+    """Get tickers with holder count, optionally filtered by multiple holders"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        multiple_holders = request.args.get('multiple_holders', 'false').lower() == 'true'
+        min_holders = int(request.args.get('min_holders', 2))
+        
+        from sqlalchemy import text
+        
+        if multiple_holders:
+            # Use the new view for tickers with multiple holders
+            query = text("""
+                SELECT 
+                    ts_code,
+                    symbol,
+                    name,
+                    area,
+                    industry,
+                    list_date,
+                    holder_count,
+                    latest_holder_date
+                FROM tickers_with_multiple_holders
+                WHERE holder_count >= :min_holders
+                ORDER BY holder_count DESC, name ASC
+                LIMIT :limit OFFSET :offset
+            """)
+            
+            count_query = text("""
+                SELECT COUNT(*) 
+                FROM tickers_with_multiple_holders
+                WHERE holder_count >= :min_holders
+            """)
+        else:
+            # Original query for all tickers
+            query = text("""
+                SELECT 
+                    t.ts_code,
+                    t.symbol,
+                    t.name,
+                    t.area,
+                    t.industry,
+                    t.list_date,
+                    COUNT(DISTINCT h.holder_name) as holder_count,
+                    MAX(h.end_date) as latest_holder_date
+                FROM tickers t
+                LEFT JOIN top_holders h ON t.ts_code = h.ts_code 
+                    AND h.end_date = (
+                        SELECT MAX(end_date) 
+                        FROM top_holders 
+                        WHERE ts_code = t.ts_code
+                    )
+                GROUP BY t.ts_code, t.symbol, t.name, t.area, t.industry, t.list_date
+                ORDER BY holder_count DESC, t.name ASC
+                LIMIT :limit OFFSET :offset
+            """)
+            
+            count_query = text("SELECT COUNT(*) FROM tickers")
+        
+        offset = (page - 1) * per_page
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'min_holders': min_holders,
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        tickers = []
+        for row in result:
+            tickers.append({
+                'ts_code': row[0],
+                'symbol': row[1] or '-',
+                'name': row[2],
+                'area': row[3] or '',
+                'industry': row[4] or '',
+                'list_date': row[5],
+                'holder_count': row[6] or 0,
+                'latest_holder_date': row[7]
+            })
+        
+        # Get total count for pagination
+        if multiple_holders:
+            total_count = service.session.execute(count_query, {'min_holders': min_holders}).scalar()
+        else:
+            total_count = service.session.execute(count_query).scalar()
+        
+        update_info = service.get_latest_update_info()
+        
+        return jsonify({
+            'success': True,
+            'data': tickers,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            },
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/tickers/<ts_code>/holders')
+def api_ticker_holders(ts_code):
+    """Get top 10 holders for a specific ticker"""
+    service = DataService()
+    try:
+        ticker_info, error = service.get_ticker_holders(ts_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': ticker_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/update-data', methods=['POST'])
+def api_update_data():
+    """Manual trigger for data update"""
+    service = DataService()
+    try:
+        success, message = service.update_all_data()
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/holders')
+def api_holders():
+    """Get individual shareholders with ticker count using the database view with pagination"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        min_tickers = int(request.args.get('min_tickers', 2))
+        
+        offset = (page - 1) * per_page
+        
+        from sqlalchemy import text
+        
+        # Main query with pagination
+        query = text("""
+            SELECT holder_name, ticker_count
+            FROM individual_holder_tickers
+            WHERE ticker_count >= :min_tickers
+            ORDER BY ticker_count DESC, holder_name ASC
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        # Count query for pagination
+        count_query = text("""
+            SELECT COUNT(*) 
+            FROM individual_holder_tickers
+            WHERE ticker_count >= :min_tickers
+        """)
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'min_tickers': min_tickers,
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        holders = []
+        for row in result:
+            holders.append({
+                'holder_name': row[0],
+                'ticker_count': row[1]
+            })
+        
+        # Get total count for pagination
+        total_count = service.session.execute(count_query, {'min_tickers': min_tickers}).scalar()
+        
+        return jsonify({
+            'success': True,
+            'data': holders,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/holder/<path:holder_name>')
+def holder_detail(holder_name):
+    """Holder detail page showing all tickers owned"""
+    return render_template('holder_detail.html', holder_name=holder_name)
+
+@app.route('/api/holders/<path:holder_name>/tickers')
+def api_holder_tickers(holder_name):
+    """Get all tickers and holdings for a specific holder"""
+    service = DataService()
+    try:
+        from sqlalchemy import text
+        
+        query = text("""
+            SELECT 
+                t.ts_code,
+                t.symbol,
+                t.name,
+                h.hold_amount,
+                h.hold_ratio,
+                h.hold_change,
+                h.end_date
+            FROM top_holders h
+            JOIN tickers t ON h.ts_code = t.ts_code
+            WHERE h.holder_name = :holder_name
+            ORDER BY h.hold_ratio DESC
+        """)
+        
+        result = service.session.execute(query, {'holder_name': holder_name})
+        tickers = []
+        for row in result:
+            tickers.append({
+                'ts_code': row[0],
+                'symbol': row[1] or '-',
+                'name': row[2],
+                'hold_amount': row[3],
+                'hold_ratio': row[4],
+                'hold_change': row[5],
+                'end_date': row[6]
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'holder_name': holder_name,
+                'tickers': tickers
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/players')
+def api_players():
+    """Get market players with transaction count"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        offset = (page - 1) * per_page
+        
+        from sqlalchemy import text
+        
+        # Main query with pagination
+        query = text("""
+            SELECT 
+                code,
+                name,
+                (SELECT COUNT(*) FROM player_transactions WHERE player_code = mp.code) as transaction_count
+            FROM market_players mp
+            ORDER BY name
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        # Count query for pagination
+        count_query = text("SELECT COUNT(*) FROM market_players")
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        players = []
+        for row in result:
+            players.append({
+                'code': row[0],
+                'name': row[1],
+                'transaction_count': row[2]
+            })
+        
+        # Get total count for pagination
+        total_count = service.session.execute(count_query).scalar()
+        
+        return jsonify({
+            'success': True,
+            'data': players,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/players/<player_code>/transactions')
+def api_player_transactions(player_code):
+    """Get all transactions for a specific market player"""
+    service = DataService()
+    try:
+        player_info, error = service.get_player_transactions(player_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': player_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/recent-activities')
+def api_recent_activities():
+    """Get market players with recent activities in the last 30 days"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        offset = (page - 1) * per_page
+        
+        from sqlalchemy import text
+        
+        # Calculate date 30 days ago
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+        
+        # Main query with pagination
+        query = text("""
+            SELECT 
+                mp.code,
+                mp.name,
+                COUNT(pt.id) as recent_transaction_count
+            FROM market_players mp
+            JOIN player_transactions pt ON mp.code = pt.player_code
+            WHERE pt.trade_date >= :thirty_days_ago
+            GROUP BY mp.code, mp.name
+            ORDER BY recent_transaction_count DESC, mp.name
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        # Count query for pagination
+        count_query = text("""
+            SELECT COUNT(DISTINCT mp.code)
+            FROM market_players mp
+            JOIN player_transactions pt ON mp.code = pt.player_code
+            WHERE pt.trade_date >= :thirty_days_ago
+        """)
+        
+        # Execute main query
+        result = service.session.execute(query, {
+            'thirty_days_ago': thirty_days_ago,
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        players = []
+        for row in result:
+            players.append({
+                'code': row[0],
+                'name': row[1],
+                'recent_transaction_count': row[2]
+            })
+        
+        # Get total count for pagination
+        total_count = service.session.execute(count_query, {'thirty_days_ago': thirty_days_ago}).scalar()
+        
+        return jsonify({
+            'success': True,
+            'data': players,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/recent-activities/<player_code>/transactions')
+def api_recent_player_transactions(player_code):
+    """Get recent transactions for a specific market player in the last 30 days"""
+    service = DataService()
+    try:
+        # Calculate date 30 days ago
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+        
+        from sqlalchemy import text
+        
+        # Get player info
+        player = service.session.query(MarketPlayer).filter_by(code=player_code).first()
+        if not player:
+            return jsonify({
+                'success': False,
+                'error': "Market player not found"
+            }), 404
+        
+        # Get recent transactions
+        query = text("""
+            SELECT 
+                pt.player_code,
+                pt.ts_code,
+                pt.trade_date,
+                pt.side,
+                pt.vol,
+                pt.amount,
+                t.name as ticker_name,
+                t.symbol as ticker_symbol
+            FROM player_transactions pt
+            JOIN tickers t ON pt.ts_code = t.ts_code
+            WHERE pt.player_code = :player_code
+                AND pt.trade_date >= :thirty_days_ago
+            ORDER BY pt.trade_date DESC
+        """)
+        
+        result = service.session.execute(query, {
+            'player_code': player_code,
+            'thirty_days_ago': thirty_days_ago
+        })
+        
+        transactions = []
+        for row in result:
+            transactions.append({
+                'player_code': row[0],
+                'ts_code': row[1],
+                'trade_date': row[2],
+                'side': row[3],
+                'vol': row[4],
+                'amount': row[5],
+                'ticker_name': row[6],
+                'ticker_symbol': row[7]
+            })
+        
+        player_info = {
+            'code': player.code,
+            'name': player.name,
+            'transactions': transactions
+        }
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': player_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/financial-reports/<ts_code>/balance-sheets')
+def api_balance_sheets(ts_code):
+    """Get balance sheets for a specific ticker for the latest quarter"""
+    service = DataService()
+    try:
+        ticker_info, error = service.get_balance_sheets(ts_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': ticker_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/financial-reports/<ts_code>/income-statements')
+def api_income_statements(ts_code):
+    """Get income statements for a specific ticker for the latest quarter"""
+    service = DataService()
+    try:
+        ticker_info, error = service.get_income_statements(ts_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': ticker_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/financial-reports/<ts_code>/cash-flows')
+def api_cash_flows(ts_code):
+    """Get cash flows for a specific ticker for the latest quarter"""
+    service = DataService()
+    try:
+        ticker_info, error = service.get_cash_flows(ts_code)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 404
+        
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': ticker_info,
+            'latest_update': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/update-info')
+def api_update_info():
+    """Get latest update information"""
+    service = DataService()
+    try:
+        update_info = service.get_latest_update_info()
+        return jsonify({
+            'success': True,
+            'data': update_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+if __name__ == '__main__':
+    app.run(
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', 5001)),
+        debug=os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    )

@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}{{ player_name }} Recent Activities - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('recent_activities') }}">Recent Activities</a></li>
+                    <li class="breadcrumb-item active">Player Details</li>
+                </ol>
+            </nav>
+            
+            <div id="playerInfo">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Transactions (Last 30 Days)</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="updateInfo" class="text-muted small">Loading...</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <label for="perPageSelect" class="form-label">Items per page:</label>
+                            <select class="form-select form-select-sm" id="perPageSelect" style="width: auto; display: inline-block;" onchange="changePerPage()">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="transactionsTable">
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Transaction pagination">
+                        <ul class="pagination justify-content-center" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const playerCode = '{{ player_code }}';
+let currentPage = 1;
+let currentPerPage = 25;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlayerDetails();
+    loadUpdateInfo();
+});
+
+function loadPlayerDetails() {
+    const params = new URLSearchParams({
+        page: currentPage,
+        per_page: currentPerPage
+    });
+    
+    fetch(`/api/recent-activities/${playerCode}/transactions?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayPlayerInfo(data.data);
+                displayTransactions(data.data.transactions);
+                // Update pagination if data includes pagination info
+                if (data.pagination) {
+                    displayPagination(data.pagination);
+                }
+            } else {
+                showError('Failed to load player details: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load player details');
+        });
+}
+
+function displayPlayerInfo(player) {
+    const playerInfo = document.getElementById('playerInfo');
+    
+    playerInfo.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">${player.name}</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Player Name:</strong> ${player.name}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displayTransactions(transactions) {
+    const transactionsTable = document.getElementById('transactionsTable');
+    
+    if (!transactions || transactions.length === 0) {
+        transactionsTable.innerHTML = '<div class="alert alert-info">No recent transaction information available</div>';
+        return;
+    }
+    
+    const totalTransactions = transactions.length;
+    
+    transactionsTable.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Stock Code</th>
+                        <th>Stock Name</th>
+                        <th>Trade Date</th>
+                        <th>Side</th>
+                        <th>Volume</th>
+                        <th>Net Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${transactions.map((transaction, index) => `
+                        <tr>
+                            <td><span class="badge bg-primary">${(currentPage - 1) * currentPerPage + index + 1}</span></td>
+                            <td>
+                                <a href="/ticker/${transaction.ts_code || ''}" target="_blank">
+                                    ${transaction.ts_code || 'N/A'}
+                                </a>
+                            </td>
+                            <td>${transaction.ticker_name || transaction.ticker_symbol || 'N/A'}</td>
+                            <td>${formatDate(transaction.trade_date)}</td>
+                            <td>
+                                <span class="badge ${transaction.side === '净买入' ? 'bg-success' : transaction.side === '净卖出' ? 'bg-danger' : 'bg-secondary'}">
+                                    ${transaction.side || 'N/A'}
+                                </span>
+                            </td>
+                            <td class="text-end">${formatNumber(transaction.vol)}</td>
+                            <td class="text-end">${formatCurrency(transaction.amount)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <td colspan="5" class="text-end"><strong>Total Transactions (30 Days):</strong></td>
+                        <td colspan="2"><strong>${totalTransactions}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+}
+
+function displayPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    if (!paginationDiv) return;
+    
+    const { page, total_pages } = pagination;
+    let html = '';
+    
+    // Previous button
+    html += `
+        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page - 1})">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(total_pages, page + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${total_pages})">${total_pages}</a></li>`;
+    }
+    
+    // Next button
+    html += `
+        <li class="page-item ${page === total_pages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page + 1})">Next</a>
+        </li>
+    `;
+    
+    paginationDiv.innerHTML = html;
+}
+
+function changePage(newPage) {
+    if (newPage < 1) return;
+    currentPage = newPage;
+    loadPlayerDetails();
+}
+
+function changePerPage() {
+    const select = document.getElementById('perPageSelect');
+    currentPerPage = parseInt(select.value);
+    currentPage = 1;
+    loadPlayerDetails();
+}
+
+function formatNumber(num) {
+    if (num === null || num === undefined || isNaN(num) || num === 0) return '0';
+    
+    if (num >= 100000000) {
+        return (num / 100000000).toFixed(2) + '亿';
+    } else if (num >= 10000) {
+        return (num / 10000).toFixed(2) + '万';
+    } else {
+        return parseFloat(num).toLocaleString();
+    }
+}
+
+function formatCurrency(amount) {
+    if (amount === null || amount === undefined || isNaN(amount)) return '¥0';
+    const sign = amount < 0 ? '-' : '';
+    const absAmount = Math.abs(amount);
+    return sign + '¥' + formatNumber(absAmount);
+}
+
+function formatDate(dateStr) {
+    if (!dateStr || dateStr === 'nan') return 'N/A';
+    
+    try {
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const day = dateStr.substring(6, 8);
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function loadUpdateInfo() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const info = data.data;
+                const transactionsUpdate = info.transactions.last_update_date || 'Never';
+                document.getElementById('updateInfo').textContent = 
+                    `Last updated: ${transactionsUpdate}`;
+            }
+        });
+}
+
+function showError(message) {
+    document.getElementById('playerInfo').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+    document.getElementById('transactionsTable').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+}
+</script>
+{% endblock %}
