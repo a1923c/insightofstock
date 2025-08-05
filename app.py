@@ -379,6 +379,11 @@ def holder_detail(holder_name):
     """Holder detail page showing all tickers owned"""
     return render_template('holder_detail.html', holder_name=holder_name)
 
+@app.route('/player/<player_name>')
+def player_detail(player_name):
+    """Player detail page showing all transactions"""
+    return render_template('player_detail.html', player_name=player_name)
+
 @app.route('/api/holders/<path:holder_name>/tickers')
 def api_holder_tickers(holder_name):
     """Get all tickers and holdings for a specific holder"""
@@ -429,6 +434,112 @@ def api_holder_tickers(holder_name):
     finally:
         service.close()
 
+@app.route('/api/market-players')
+def api_market_players():
+    """Get market players"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        
+        from sqlalchemy import text
+        
+        # Get total count first
+        count_query = text("SELECT COUNT(*) FROM hm_list")
+        total_count = service.session.execute(count_query).scalar()
+        
+        # Get paginated results
+        query = text("""
+            SELECT id, name, "desc", orgs
+            FROM hm_list
+            ORDER BY name ASC
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        offset = (page - 1) * per_page
+        result = service.session.execute(query, {
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        players = []
+        for row in result:
+            players.append({
+                'id': row[0],
+                'name': row[1],
+                'desc': row[2],
+                'orgs': row[3]
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': players,
+            'count': len(players),
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/market-players/<path:player_name>/transactions')
+def api_player_transactions(player_name):
+    """Get all transactions for a specific market player"""
+    service = DataService()
+    try:
+        from sqlalchemy import text
+        
+        query = text("""
+            SELECT 
+                trade_date,
+                ts_code,
+                ts_name,
+                buy_amount,
+                sell_amount,
+                net_amount,
+                orgs
+            FROM hm_detail
+            WHERE name = :player_name
+            ORDER BY trade_date DESC
+        """)
+        
+        result = service.session.execute(query, {'player_name': player_name})
+        transactions = []
+        for row in result:
+            transactions.append({
+                'trade_date': row[0],
+                'ts_code': row[1],
+                'ts_name': row[2],
+                'buy_amount': row[3],
+                'sell_amount': row[4],
+                'net_amount': row[5],
+                'orgs': row[6]
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'player_name': player_name,
+                'transactions': transactions
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
 @app.route('/api/update-info')
 def api_update_info():
     """Get latest update information"""
@@ -439,6 +550,33 @@ def api_update_info():
             'success': True,
             'data': update_info
         })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+@app.route('/api/financial-reports/<ts_code>')
+def api_financial_reports(ts_code):
+    """Get financial reports for a specific ticker"""
+    service = DataService()
+    try:
+        # Get optional end_date parameter
+        end_date = request.args.get('end_date', None)
+        
+        reports = service.get_financial_reports(ts_code, end_date)
+        if reports:
+            return jsonify({
+                'success': True,
+                'data': reports
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No financial reports found for this ticker'
+            }), 404
     except Exception as e:
         return jsonify({
             'success': False,

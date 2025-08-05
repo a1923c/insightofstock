@@ -8,8 +8,7 @@
         <div class="col-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('players') }}">Market Players</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
                     <li class="breadcrumb-item active">Player Details</li>
                 </ol>
             </nav>
@@ -43,14 +42,17 @@
 
 {% block scripts %}
 <script>
-const playerCode = '{{ player_code }}';
+const playerName = '{{ player_name }}';
 
 document.addEventListener('DOMContentLoaded', function() {
     loadPlayerDetails();
 });
 
 function loadPlayerDetails() {
-    fetch(`/api/players/${playerCode}/transactions`)
+    // URL encode the player name for the API call
+    const encodedPlayerName = encodeURIComponent(playerName);
+    
+    fetch(`/api/market-players/${encodedPlayerName}/transactions`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -72,12 +74,12 @@ function displayPlayerInfo(player) {
     playerInfo.innerHTML = `
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h3 class="mb-0">${player.name}</h3>
+                <h3 class="mb-0">${player.player_name}</h3>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Player Name:</strong> ${player.name}</p>
+                    <div class="col-md-12">
+                        <p><strong>Player Name:</strong> ${player.player_name}</p>
                     </div>
                 </div>
             </div>
@@ -104,8 +106,8 @@ function displayTransactions(transactions) {
                         <th>Stock Code</th>
                         <th>Stock Name</th>
                         <th>Trade Date</th>
-                        <th>Side</th>
-                        <th>Volume</th>
+                        <th>Buy Amount</th>
+                        <th>Sell Amount</th>
                         <th>Net Amount</th>
                     </tr>
                 </thead>
@@ -131,22 +133,22 @@ function displayTransactions(transactions) {
                                     ${transaction.ts_code}
                                 </a>
                             </td>
-                            <td>${transaction.ticker_name}</td>
+                            <td>${transaction.ts_name || '-'}</td>
                             <td>${formatDate(transaction.trade_date)}</td>
-                            <td>
-                                <span class="badge ${transaction.side === '净买入' ? 'bg-success' : 'bg-danger'}">
-                                    ${transaction.side}
+                            <td class="text-end">${formatCurrency(transaction.buy_amount || 0)}</td>
+                            <td class="text-end">${formatCurrency(transaction.sell_amount || 0)}</td>
+                            <td class="text-end">
+                                <span class="${(transaction.net_amount || 0) >= 0 ? 'text-success' : 'text-danger'}">
+                                    ${formatCurrency(transaction.net_amount || 0)}
                                 </span>
                             </td>
-                            <td class="text-end">${formatNumber(transaction.vol)}</td>
-                            <td class="text-end">${formatCurrency(transaction.amount)}</td>
                         </tr>
                     `}).join('')}
                 </tbody>
                 <tfoot>
                     <tr class="table-secondary">
-                        <td colspan="5" class="text-end"><strong>Total Transactions:</strong></td>
-                        <td colspan="2"><strong>${totalTransactions}</strong></td>
+                        <td colspan="6" class="text-end"><strong>Total Transactions:</strong></td>
+                        <td><strong>${totalTransactions}</strong></td>
                     </tr>
                 </tfoot>
             </table>

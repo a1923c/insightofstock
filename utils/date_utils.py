@@ -62,8 +62,22 @@ def get_quarter_end_dates(count=4):
     
     return dates
 
+def get_date_n_days_ago(n):
+    """
+    Get the date n days ago from today.
+    
+    Args:
+        n (int): Number of days ago
+        
+    Returns:
+        str: Date in format YYYYMMDD
+    """
+    date = datetime.now() - timedelta(days=n)
+    return date.strftime('%Y%m%d')
+
 if __name__ == "__main__":
     # Test the functions
     print(f"Latest quarter end date: {get_latest_quarter_end_date()}")
     print(f"Latest quarter end date (20250801): {get_latest_quarter_end_date('20250801')}")
     print(f"Last 4 quarter end dates: {get_quarter_end_dates(4)}")
+    print(f"Date 180 days ago: {get_date_n_days_ago(180)}")

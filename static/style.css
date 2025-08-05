@@ -1,0 +1,14 @@
+body {
+    font-family: 'Roboto', Arial, sans-serif;
+    background-color: #f8f9fa;
+    color: #222;
+}
+/* Optional: Custom button style override */
+.btn-primary {
+    background-color: #3182ce;
+    border-color: #3182ce;
+}
+.btn-primary:hover {
+    background-color: #2b6cb0;
+    border-color: #2b6cb0;
+}

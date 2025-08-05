@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            Welcome to your dashboard! Here you can view and analyze your stock data.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Portfolio Overview</h5>
+                <!-- ...existing code for portfolio summary... -->
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Recent Activity</h5>
+                <!-- ...existing code for recent activity... -->
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Stock Data</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <!-- ...existing code for table headers and rows... -->
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
