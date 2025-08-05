@@ -39,7 +39,7 @@ The project is already set up with all dependencies installed. The virtual envir
 
 The Tushare token has been pre-configured in `.env` file:
 ```
-TUSHARE_TOKEN=a482999a9317dc55907b39ad983c2d43e6fb18c57563dc8e4b1369e6
+TUSHARE_TOKEN=xxx
 ```
 
 ### 3. Start the Application
