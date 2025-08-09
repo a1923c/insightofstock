@@ -7,6 +7,10 @@ from datetime import datetime
 
 load_dotenv()
 
+# Explicitly set the database URL to ensure the correct database is used
+# This assumes the database file is located at /Users/admin_gu/insightofstock/database/insightofstock.db
+os.environ['DATABASE_URL'] = 'sqlite:///database/insightofstock.db'
+
 app = Flask(__name__)
 
 # Handle subdirectory deployment
@@ -530,6 +534,63 @@ def api_player_transactions(player_name):
             'data': {
                 'player_name': player_name,
                 'transactions': transactions
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        service.close()
+
+# New route for Recent Hot Stocks
+@app.route('/api/recent-hot-stocks')
+def api_recent_hot_stocks():
+    """Get recent hot stocks with ts_code and ts_name"""
+    service = DataService()
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20)) # Defaulting to 20 per page, similar to market players
+        
+        from sqlalchemy import text
+        
+        # Get total count first
+        # Using 'recent_hot_stocks' as per user feedback
+        count_query = text("SELECT COUNT(DISTINCT ts_code) FROM recent_hot_stocks")
+        total_count = service.session.execute(count_query).scalar()
+        
+        # Get paginated results
+        query = text("""
+            SELECT DISTINCT ts_code, ts_name
+            FROM recent_hot_stocks
+            ORDER BY ts_code ASC -- Or any other relevant order
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        offset = (page - 1) * per_page
+        result = service.session.execute(query, {
+            'limit': per_page,
+            'offset': offset
+        })
+        
+        hot_stocks = []
+        for row in result:
+            hot_stocks.append({
+                'ts_code': row[0],
+                'ts_name': row[1]
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': hot_stocks,
+            'count': len(hot_stocks),
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'total_pages': (total_count + per_page - 1) // per_page
             }
         })
     except Exception as e:
