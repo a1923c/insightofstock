@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Float, Date, DateTime, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy import text
@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-load_dotenv('/var/www/insightofstock/.env')
+load_dotenv('.env')
 
 Base = declarative_base()
 
@@ -21,13 +21,19 @@ class Ticker(Base):
     industry = Column(String(50))
     list_date = Column(String(10))
     updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationship
     top_holders = relationship("TopHolder", back_populates="ticker")
-    
+    daily_basic = relationship("DailyBasic", back_populates="ticker")
+    ths_hots = relationship("ThsHot", back_populates="ticker")
+    dc_hots = relationship("DcHot", back_populates="ticker")
+    balance_sheets = relationship("BalanceSheet", back_populates="ticker")
+    cash_flows = relationship("CashFlow", back_populates="ticker")
+    income_statements = relationship("IncomeStatement", back_populates="ticker")
+    fina_indicators = relationship("FinaIndicator", back_populates="ticker")
     def __repr__(self):
         return f"<Ticker(ts_code='{self.ts_code}', name='{self.name}')>"
-
+    
 class TopHolder(Base):
     __tablename__ = 'top_holders'
     
@@ -415,10 +421,255 @@ class IncomeStatement(Base):
     # Relationship
     ticker = relationship("Ticker", back_populates="income_statements")
 
-# Add relationships to Ticker class
-Ticker.balance_sheets = relationship("BalanceSheet", back_populates="ticker")
-Ticker.cash_flows = relationship("CashFlow", back_populates="ticker")
-Ticker.income_statements = relationship("IncomeStatement", back_populates="ticker")
+class FinaIndicator(Base):
+    __tablename__ = 'fina_indicators'
+    
+    id = Column(Integer, primary_key=True)
+    ts_code = Column(String(20), ForeignKey('tickers.ts_code'), nullable=False)
+    ann_date = Column(String(10))
+    end_date = Column(String(10))
+    eps = Column(Float)  # 基本每股收益
+    dt_eps = Column(Float)  # 稀释每股收益
+    total_revenue_ps = Column(Float)  # 每股营业总收入
+    revenue_ps = Column(Float)  # 每股营业收入
+    capital_rese_ps = Column(Float)  # 每股资本公积
+    surplus_rese_ps = Column(Float)  # 每股盈余公积
+    undist_profit_ps = Column(Float)  # 每股未分配利润
+    extra_item = Column(Float)  # 非经常性损益
+    profit_dedt = Column(Float)  # 扣除非经常性损益后的净利润
+    gross_margin = Column(Float)  # 毛利率
+    current_ratio = Column(Float)  # 流动比率
+    quick_ratio = Column(Float)  # 速动比率
+    cash_ratio = Column(Float)  # 保守速动比率
+    invturn_days = Column(Float)  # 存货周转天数
+    arturn_days = Column(Float)  # 应收账款周转天数
+    inv_turn = Column(Float)  # 存货周转率
+    ar_turn = Column(Float)  # 应收账款周转率
+    ca_turn = Column(Float)  # 流动资产周转率
+    fa_turn = Column(Float)  # 固定资产周转率
+    assets_turn = Column(Float)  # 总资产周转率
+    op_income = Column(Float)  # 经营活动净收益
+    valuechange_income = Column(Float)  # 价值变动净收益
+    interst_income = Column(Float)  # 利息费用
+    daa = Column(Float)  # 折旧与摊销
+    ebit = Column(Float)  # 息税前利润
+    ebitda = Column(Float)  # 息税折旧摊销前利润
+    fcff = Column(Float)  # 企业自由现金流量
+    fcfe = Column(Float)  # 股权自由现金流量
+    current_exint = Column(Float)  # 无息流动负债
+    noncurrent_exint = Column(Float)  # 无息非流动负债
+    interestdebt = Column(Float)  # 带息债务
+    netdebt = Column(Float)  # 净债务
+    tangible_asset = Column(Float)  # 有形资产
+    working_capital = Column(Float)  # 营运资金
+    networking_capital = Column(Float)  # 营运流动资本
+    invest_capital = Column(Float)  # 全部投入资本
+    retained_earnings = Column(Float)  # 留存收益
+    diluted2_eps = Column(Float)  # 期末摊薄每股收益
+    bps = Column(Float)  # 每股净资产
+    ocfps = Column(Float)  # 每股经营活动产生的现金流量净额
+    retainedps = Column(Float)  # 每股留存收益
+    cfps = Column(Float)  # 每股现金流量净额
+    ebit_ps = Column(Float)  # 每股息税前利润
+    fcff_ps = Column(Float)  # 每股企业自由现金流量
+    fcfe_ps = Column(Float)  # 每股股东自由现金流量
+    netprofit_margin = Column(Float)  # 销售净利率
+    grossprofit_margin = Column(Float)  # 销售毛利率
+    cogs_of_sales = Column(Float)  # 销售成本率
+    expense_of_sales = Column(Float)  # 销售期间费用率
+    profit_to_gr = Column(Float)  # 净利润/营业总收入
+    saleexp_to_gr = Column(Float)  # 销售费用/营业总收入
+    adminexp_of_gr = Column(Float)  # 管理费用/营业总收入
+    finaexp_of_gr = Column(Float)  # 财务费用/营业总收入
+    impai_ttm = Column(Float)  # 资产减值损失/营业总收入
+    gc_of_gr = Column(Float)  # 营业总成本/营业总收入
+    op_of_gr = Column(Float)  # 营业利润/营业总收入
+    ebit_of_gr = Column(Float)  # 息税前利润/营业总收入
+    roe = Column(Float)  # 净资产收益率
+    roe_waa = Column(Float)  # 加权平均净资产收益率
+    roe_dt = Column(Float)  # 净资产收益率(扣除非经常损益)
+    roa = Column(Float)  # 总资产报酬率
+    npta = Column(Float)  # 总资产净利率
+    roic = Column(Float)  # 投入资本回报率
+    roe_yearly = Column(Float)  # 年化净资产收益率
+    roa2_yearly = Column(Float)  # 年化总资产报酬率
+    roe_avg = Column(Float)  # 平均净资产收益率(增发条件)
+    opincome_of_ebt = Column(Float)  # 经营活动净收益/利润总额
+    investincome_of_ebt = Column(Float)  # 价值变动净收益/利润总额
+    n_op_profit_of_ebt = Column(Float)  # 营业外收支净额/利润总额
+    tax_to_ebt = Column(Float)  # 所得税/利润总额
+    dtprofit_to_profit = Column(Float)  # 扣除非经常损益后的净利润/净利润
+    salescash_to_or = Column(Float)  # 销售商品提供劳务收到的现金/营业收入
+    ocf_to_or = Column(Float)  # 经营活动产生的现金流量净额/营业收入
+    ocf_to_opincome = Column(Float)  # 经营活动产生的现金流量净额/经营活动净收益
+    capitalized_to_da = Column(Float)  # 资本支出/折旧和摊销
+    debt_to_assets = Column(Float)  # 资产负债率
+    assets_to_eqt = Column(Float)  # 权益乘数
+    dp_assets_to_eqt = Column(Float)  # 产权比率
+    ca_to_assets = Column(Float)  # 流动资产/总资产
+    nca_to_assets = Column(Float)  # 非流动资产/总资产
+    tbassets_to_total_assets = Column(Float)  # 有形资产/总资产
+    int_to_talcap = Column(Float)  # 带息债务/全部投入资本
+    eqt_to_talcapital = Column(Float)  # 归属于母公司的股东权益/全部投入资本
+    currentdebt_to_debt = Column(Float)  # 流动负债/负债合计
+    longdeb_to_debt = Column(Float)  # 非流动负债/负债合计
+    ocf_to_shortdebt = Column(Float)  # 经营活动产生的现金流量净额/流动负债
+    debt_to_eqt = Column(Float)  # 产权比率
+    eqt_to_debt = Column(Float)  # 归属于母公司的股东权益/负债合计
+    eqt_to_interestdebt = Column(Float)  # 归属于母公司的股东权益/带息债务
+    tangibleasset_to_debt = Column(Float)  # 有形资产/负债合计
+    tangasset_to_intdebt = Column(Float)  # 有形资产/带息债务
+    tangibleasset_to_netdebt = Column(Float)  # 有形资产/净债务
+    ocf_to_debt = Column(Float)  # 经营活动产生的现金流量净额/负债合计
+    ocf_to_interestdebt = Column(Float)  # 经营活动产生的现金流量净额/带息债务
+    ocf_to_netdebt = Column(Float)  # 经营活动产生的现金流量净额/净债务
+    ebit_to_interest = Column(Float)  # 已获利息倍数(EBIT/利息费用)
+    long_debt_to_working_capital = Column(Float)  # 长期债务与营运资金比率
+    ebitda_to_debt = Column(Float)  # 息税折旧摊销前利润/负债合计
+    turn_days = Column(Float)  # 营业周期
+    roa_yearly = Column(Float)  # 年化总资产净利率
+    roa_dp = Column(Float)  # 投资回报率
+    fixed_assets = Column(Float)  # 固定资产合计
+    profit_prefin_exp = Column(Float)  # 扣除财务费用前营业利润
+    non_op_profit = Column(Float)  # 非营业利润
+    op_to_ebt = Column(Float)  # 营业利润/利润总额
+    nop_to_ebt = Column(Float)  # 非营业利润/利润总额
+    ocf_to_profit = Column(Float)  # 经营活动产生的现金流量净额/营业利润
+    cash_to_liqdebt = Column(Float)  # 货币资金/流动负债
+    cash_to_liqdebt_withinterest = Column(Float)  # 货币资金/带息流动负债
+    op_to_liqdebt = Column(Float)  # 营业利润/流动负债
+    op_to_debt = Column(Float)  # 营业利润/负债合计
+    roic_yearly = Column(Float)  # 年化投入资本回报率
+    total_fa_trun = Column(Float)  # 固定资产合计周转率
+    profit_to_op = Column(Float)  # 利润总额/营业利润
+    q_opincome = Column(Float)  # 经营活动净收益单季度
+    q_investincome = Column(Float)  # 价值变动净收益单季度
+    q_dtprofit = Column(Float)  # 扣除非经常损益后的净利润单季度
+    q_eps = Column(Float)  # 基本每股收益单季度
+    q_netprofit_margin = Column(Float)  # 销售净利率单季度
+    q_gsprofit_margin = Column(Float)  # 销售毛利率单季度
+    q_exp_to_sales = Column(Float)  # 销售期间费用率单季度
+    q_profit_to_gr = Column(Float)  # 净利润/营业总收入单季度
+    q_saleexp_to_gr = Column(Float)  # 销售费用/营业总收入单季度
+    q_adminexp_to_gr = Column(Float)  # 管理费用/营业总收入单季度
+    q_finaexp_to_gr = Column(Float)  # 财务费用/营业总收入单季度
+    q_impair_to_gr_ttm = Column(Float)  # 资产减值损失/营业总收入单季度
+    q_gc_to_gr = Column(Float)  # 营业总成本/营业总收入单季度
+    q_op_to_gr = Column(Float)  # 营业利润/营业总收入单季度
+    q_roe = Column(Float)  # 净资产收益率单季度
+    q_dt_roe = Column(Float)  # 净资产单季度收益率(扣除非经常损益)
+    q_npta = Column(Float)  # 总资产净利率单季度
+    q_opincome_to_ebt = Column(Float)  # 经营活动净收益/利润总额单季度
+    q_investincome_to_ebt = Column(Float)  # 价值变动净收益/利润总额单季度
+    q_dtprofit_to_profit = Column(Float)  # 扣除非经常损益后的净利润/净利润单季度
+    q_salescash_to_or = Column(Float)  # 销售商品提供劳务收到的现金/营业收入单季度
+    q_ocf_to_sales = Column(Float)  # 经营活动产生的现金流量净额/营业收入单季度
+    q_ocf_to_opincome = Column(Float)  # 经营活动产生的现金流量净额/经营活动净收益单季度
+    basic_eps_yoy = Column(Float)  # 基本每股收益同比增长率(%)
+    dt_eps_yoy = Column(Float)  # 稀释每股收益同比增长率(%)
+    cfps_yoy = Column(Float)  # 每股经营活动产生的现金流量净额同比增长率(%)
+    op_yoy = Column(Float)  # 营业利润同比增长率(%)
+    ebt_yoy = Column(Float)  # 利润总额同比增长率(%)
+    netprofit_yoy = Column(Float)  # 归属母公司股东的净利润同比增长率(%)
+    dt_netprofit_yoy = Column(Float)  # 归属母公司股东的净利润-扣除非经常损益同比增长率(%)
+    ocf_yoy = Column(Float)  # 经营活动产生的现金流量净额同比增长率(%)
+    roe_yoy = Column(Float)  # 净资产收益率同比增长率(%)
+    bps_yoy = Column(Float)  # 每股净资产相对年初增长率(%)
+    assets_yoy = Column(Float)  # 资产总计相对年初增长率(%)
+    eqt_yoy = Column(Float)  # 归属母公司的股东权益相对年初增长率(%)
+    tr_yoy = Column(Float)  # 营业总收入同比增长率(%)
+    or_yoy = Column(Float)  # 营业收入同比增长率(%)
+    q_gr_yoy = Column(Float)  # 营业总收入同比增长率(%)
+    q_gr_qoq = Column(Float)  # 营业总收入环比增长率(%)
+    q_sales_yoy = Column(Float)  # 营业收入同比增长率(%)
+    q_sales_qoq = Column(Float)  # 营业收入环比增长率(%)
+    q_op_yoy = Column(Float)  # 营业利润同比增长率(%)
+    q_op_qoq = Column(Float)  # 营业利润环比增长率(%)
+    q_profit_yoy = Column(Float)  # 净利润同比增长率(%)
+    q_profit_qoq = Column(Float)  # 净利润环比增长率(%)
+    q_netprofit_yoy = Column(Float)  # 归属母公司股东的净利润同比增长率(%)
+    q_netprofit_qoq = Column(Float)  # 归属母公司股东的净利润环比增长率(%)
+    equity_yoy = Column(Float)  # 净资产同比增长率
+    tr_total = Column(Float)  # 营业总收入累计
+    profit_total = Column(Float)  # 利润总额累计
+    netprofit_total = Column(Float)  # 归属母公司股东的净利润累计
+    netprofit_attr_p_total = Column(Float)  # 归属母公司股东的净利润累计
+    or_total = Column(Float)  # 营业收入累计
+    q_sales_chg = Column(Float)  # 营业收入单季度环比增长率
+    q_op_chg = Column(Float)  # 营业利润单季度环比增长率
+    q_netprofit_chg = Column(Float)  # 归属母公司股东的净利润单季度环比增长率
+    q_netprofit_attr_p_chg = Column(Float)  # 归属母公司股东的净利润单季度环比增长率
+    q_profit_chg = Column(Float)  # 净利润单季度环比增长率
+    q_gr_chg = Column(Float)  # 营业总收入单季度环比增长率
+    update_flag = Column(Float)
+    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    ticker = relationship("Ticker", back_populates="fina_indicators")
+
+class DailyBasic(Base):
+    __tablename__ = 'daily_basic'
+    
+    id = Column(Integer, primary_key=True)
+    ts_code = Column(String(20), ForeignKey('tickers.ts_code'), nullable=False)
+    trade_date = Column(String(10), nullable=False)
+    turnover_rate = Column(Float)
+    volume_ratio = Column(Float)
+    pe = Column(Float)
+    pe_ttm = Column(Float)
+    pb = Column(Float)
+    total_mv = Column(Float)
+    float_mv = Column(Float)
+    total_share = Column(Float)
+    float_share = Column(Float)
+    free_share = Column(Float)
+    turnover_rate_f = Column(Float)
+    close = Column(Float)
+    circ_mv = Column(Float)
+    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    ticker = relationship("Ticker", back_populates="daily_basic")
+
+class ThsHot(Base):
+    __tablename__ = 'ths_hot'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(String, nullable=False)        # 交易日期
+    data_type = Column(String, nullable=False)         # 数据类型
+    ts_code = Column(String, index=True, nullable=True)  # 股票代码 此处可以为空，因为热点不仅仅是股票
+    ts_name = Column(String)                           # 股票名称
+    rank = Column(Integer)                             # 排行
+    pct_change = Column(Float)                         # 涨跌幅%
+    current_price = Column(Float)                      # 当前价格
+    concept = Column(String)                           # 标签
+    rank_reason = Column(String)                       # 上榜解读
+    hot = Column(Float)                                # 热度值
+    rank_time = Column(String)                         # 排行榜获取时间
+    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Optional: relationship to Ticker
+    ticker_id = Column(Integer, ForeignKey('tickers.id'), nullable=True)
+    ticker = relationship("Ticker", back_populates="ths_hots")
+
+class DcHot(Base):
+    __tablename__ = 'dc_hot'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(String, nullable=False)        # 交易日期
+    data_type = Column(String, nullable=False)         # 数据类型
+    ts_code = Column(String, index=True, nullable=True)  # 股票代码 此处可以为空，因为热点不仅仅是股票
+    ts_name = Column(String)                           # 股票名称
+    rank = Column(Integer)                             # 排行或者热度
+    pct_change = Column(Float)                         # 涨跌幅%
+    current_price = Column(Float) 
+    concept = Column(String)                           # 标签
+    hot = Column(Float)                                # 热度值当前价
+    rank_time = Column(String)                         # 排行榜获取时间
+    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Optional: relationship to Ticker
+    ticker_id = Column(Integer, ForeignKey('tickers.id'), nullable=True)
+    ticker = relationship("Ticker", back_populates="dc_hots")
+
 
 # Database setup
 def get_engine():
@@ -457,6 +708,24 @@ def create_tables():
             GROUP BY ts_code
             HAVING holder_count>=2 
             ORDER BY holder_count DESC
+        """))
+        conn.execute(text("""
+            CREATE VIEW IF NOT EXISTS recent_hot_stocks AS
+            SELECT 
+                trade_date, 
+                ts_code, 
+                ts_name, 
+                'THS' AS Security_name 
+            FROM ths_hot 
+            WHERE data_type='热股' AND date(substr(trade_date,1,4)||'-'||substr(trade_date,5,2)||'-'||substr(trade_date,7,2))>=date('now','-7 days');
+            UNION
+            SELECT 
+                trade_date, 
+                ts_code,
+                ts_name, 
+                'DC' AS Security_name 
+            FROM dc_hot 
+            WHERE data_type='A股市场' AND date(substr(trade_date,1,4)||'-'||substr(trade_date,5,2)||'-'||substr(trade_date,7,2))>=date('now','-7 days');
         """))
         conn.commit()
     

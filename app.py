@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from services.data_service import DataService
-from models import create_tables
+# from models import create_tables
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -18,7 +18,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Initialize database
-create_tables()
+# create_tables()
 
 @app.route('/')
 def index():
@@ -47,83 +47,12 @@ def api_tickers():
         multiple_holders = request.args.get('multiple_holders', 'false').lower() == 'true'
         min_holders = int(request.args.get('min_holders', 2))
         
-        from sqlalchemy import text
-        
         if multiple_holders:
-            # Use the new view for tickers with multiple holders, joining with tickers table
-            query = text("""
-                SELECT 
-                    tmh.ts_code,
-                    t.symbol,
-                    t.name,
-                    t.area,
-                    t.industry,
-                    t.list_date,
-                    tmh.holder_count
-                FROM tickers_with_multiple_holders tmh
-                JOIN tickers t ON tmh.ts_code = t.ts_code
-                WHERE tmh.holder_count >= :min_holders
-                ORDER BY tmh.holder_count DESC, t.name ASC
-                LIMIT :limit OFFSET :offset
-            """)
-            
-            count_query = text("""
-                SELECT COUNT(*) 
-                FROM tickers_with_multiple_holders
-                WHERE holder_count >= :min_holders
-            """)
+            tickers = service.get_tickers_with_multiple_holders(min_holders, per_page, (page - 1) * per_page)
+            total_count = service.count_tickers_with_multiple_holders(min_holders)
         else:
-            # Original query for all tickers
-            query = text("""
-                SELECT 
-                    t.ts_code,
-                    t.symbol,
-                    t.name,
-                    t.area,
-                    t.industry,
-                    t.list_date,
-                    COUNT(DISTINCT h.holder_name) as holder_count,
-                    MAX(h.end_date) as latest_holder_date
-                FROM tickers t
-                LEFT JOIN top_holders h ON t.ts_code = h.ts_code 
-                    AND h.end_date = (
-                        SELECT MAX(end_date) 
-                        FROM top_holders 
-                        WHERE ts_code = t.ts_code
-                    )
-                GROUP BY t.ts_code, t.symbol, t.name, t.area, t.industry, t.list_date
-                ORDER BY holder_count DESC, t.name ASC
-                LIMIT :limit OFFSET :offset
-            """)
-            
-            count_query = text("SELECT COUNT(*) FROM tickers")
-        
-        offset = (page - 1) * per_page
-        
-        # Execute main query
-        result = service.session.execute(query, {
-            'min_holders': min_holders,
-            'limit': per_page,
-            'offset': offset
-        })
-        
-        tickers = []
-        for row in result:
-            tickers.append({
-                'ts_code': row[0],
-                'symbol': row[1] or '-',
-                'name': row[2],
-                'area': row[3] or '',
-                'industry': row[4] or '',
-                'list_date': row[5],
-                'holder_count': row[6] or 0
-            })
-        
-        # Get total count for pagination
-        if multiple_holders:
-            total_count = service.session.execute(count_query, {'min_holders': min_holders}).scalar()
-        else:
-            total_count = service.session.execute(count_query).scalar()
+            tickers = service.get_all_tickers_paginated(per_page, (page - 1) * per_page)
+            total_count = service.count_all_tickers()
         
         update_info = service.get_latest_update_info()
         
@@ -151,36 +80,21 @@ def api_ticker_holders(ts_code):
     """Get top holders for a specific ticker using latest date"""
     service = DataService()
     try:
-        from sqlalchemy import text, or_
-        
         # Check if we should filter for individual holders only
         individual_only = request.args.get('individual_only', 'false').lower() == 'true'
-
-        individual_only = 'true'
+        individual_only = 'True'
         
         # Get ticker info first
-        ticker_query = text("SELECT ts_code, symbol, name, area, industry, list_date FROM tickers WHERE ts_code = :ts_code")
-        ticker_result = service.session.execute(ticker_query, {'ts_code': ts_code}).fetchone()
+        ticker_info, error = service.get_ticker_info(ts_code)
         
-        if not ticker_result:
+        if error:
             return jsonify({
                 'success': False,
-                'error': 'Ticker not found'
+                'error': error
             }), 404
         
-        ticker_info = {
-            'ts_code': ticker_result[0],
-            'symbol': ticker_result[1] or '-',
-            'name': ticker_result[2],
-            'area': ticker_result[3] or '',
-            'industry': ticker_result[4] or '',
-            'list_date': ticker_result[5]
-        }
-        
         # Get latest date for holders
-        latest_date_query = text("SELECT MAX(end_date) FROM top_holders WHERE ts_code = :ts_code")
-        latest_date_result = service.session.execute(latest_date_query, {'ts_code': ts_code}).fetchone()
-        latest_date = latest_date_result[0] if latest_date_result else None
+        latest_date = service.get_latest_holder_date_for_ticker(ts_code)
         
         if not latest_date:
             return jsonify({
@@ -188,93 +102,21 @@ def api_ticker_holders(ts_code):
                 'error': 'No holder data available'
             }), 404
         
-        # Build query for holders
-        if individual_only:
-            # Filter for individual holders with a broader filter
-            holders_query = text("""
-                SELECT 
-                    ann_date,
-                    end_date,
-                    holder_name,
-                    hold_amount,
-                    hold_ratio,
-                    holder_type,
-                    hold_change
-                FROM top_holders 
-                WHERE ts_code = :ts_code 
-                AND end_date = :end_date
-                AND (
-                    holder_type IS NULL OR 
-                    holder_type = '' OR 
-                    holder_type IN ('个人', 'G', '自然人', '个人股东')
-                )
-                ORDER BY hold_ratio DESC
-            """)
-        else:
-            holders_query = text("""
-                SELECT 
-                    ann_date,
-                    end_date,
-                    holder_name,
-                    hold_amount,
-                    hold_ratio,
-                    holder_type,
-                    hold_change
-                FROM top_holders 
-                WHERE ts_code = :ts_code 
-                AND end_date = :end_date
-                ORDER BY hold_ratio DESC
-            """)
+        holders, error = service.get_top_holders_for_ticker(ts_code, latest_date, individual_only)
         
-        holders_result = service.session.execute(holders_query, {
-            'ts_code': ts_code,
-            'end_date': latest_date
-        })
-        
-        holders = []
-        for row in holders_result:
-            holders.append({
-                'ann_date': row[0],
-                'end_date': row[1],
-                'holder_name': row[2],
-                'hold_amount': row[3],
-                'hold_ratio': row[4],
-                'holder_type': row[5],
-                'hold_change': row[6]
-            })
-        
-        # If individual_only and no individual holders found, return all holders as fallback
-        if individual_only and len(holders) == 0:
-            holders_query = text("""
-                SELECT 
-                    ann_date,
-                    end_date,
-                    holder_name,
-                    hold_amount,
-                    hold_ratio,
-                    holder_type,
-                    hold_change
-                FROM top_holders 
-                WHERE ts_code = :ts_code 
-                AND end_date = :end_date
-                ORDER BY hold_ratio DESC
-            """)
-            
-            holders_result = service.session.execute(holders_query, {
-                'ts_code': ts_code,
-                'end_date': latest_date
-            })
-            
-            for row in holders_result:
-                holders.append({
-                    'ann_date': row[0],
-                    'end_date': row[1],
-                    'holder_name': row[2],
-                    'hold_amount': row[3],
-                    'hold_ratio': row[4],
-                    'holder_type': row[5],
-                    'hold_change': row[6]
-                })
+        if error and individual_only: # If individual_only failed, try fallback
+            print(f"Individual holders not found for {ts_code}, trying fallback.")
+            holders, error = service.get_individual_holders_fallback(ts_code, latest_date)
+            if error: # If fallback also failed, return error
+                return jsonify({
+                    'success': False,
+                    'error': error
+                }), 500
+        elif error: # If not individual_only and error occurred
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 500
         
         ticker_info['holders'] = holders
         ticker_info['latest_holder_date'] = latest_date
@@ -326,38 +168,8 @@ def api_holders():
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 20))
         
-        # Query the individual_holder_tickers view
-        from sqlalchemy import text
-        
-        # Get total count first
-        count_query = text("""
-            SELECT COUNT(*) 
-            FROM individual_holder_tickers
-            WHERE ticker_count >= 2
-        """)
-        total_count = service.session.execute(count_query).scalar()
-        
-        # Get paginated results
-        query = text("""
-            SELECT holder_name, ticker_count
-            FROM individual_holder_tickers
-            WHERE ticker_count >= 2
-            ORDER BY ticker_count DESC, holder_name ASC
-            LIMIT :limit OFFSET :offset
-        """)
-        
-        offset = (page - 1) * per_page
-        result = service.session.execute(query, {
-            'limit': per_page,
-            'offset': offset
-        })
-        
-        holders = []
-        for row in result:
-            holders.append({
-                'holder_name': row[0],
-                'ticker_count': row[1]
-            })
+        total_count = service.count_individual_holder_tickers()
+        holders = service.get_individual_holder_tickers_paginated(per_page, (page - 1) * per_page)
         
         return jsonify({
             'success': True,
@@ -393,35 +205,7 @@ def api_holder_tickers(holder_name):
     """Get all tickers and holdings for a specific holder"""
     service = DataService()
     try:
-        from sqlalchemy import text
-        
-        query = text("""
-            SELECT 
-                t.ts_code,
-                t.symbol,
-                t.name,
-                h.hold_amount,
-                h.hold_ratio,
-                h.hold_change,
-                h.end_date
-            FROM top_holders h
-            JOIN tickers t ON h.ts_code = t.ts_code
-            WHERE h.holder_name = :holder_name
-            ORDER BY h.hold_ratio DESC
-        """)
-        
-        result = service.session.execute(query, {'holder_name': holder_name})
-        tickers = []
-        for row in result:
-            tickers.append({
-                'ts_code': row[0],
-                'symbol': row[1] or '-',
-                'name': row[2],
-                'hold_amount': row[3],
-                'hold_ratio': row[4],
-                'hold_change': row[5],
-                'end_date': row[6]
-            })
+        tickers = service.get_holder_tickers(holder_name)
         
         return jsonify({
             'success': True,
@@ -447,34 +231,8 @@ def api_market_players():
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 20))
         
-        from sqlalchemy import text
-        
-        # Get total count first
-        count_query = text("SELECT COUNT(*) FROM hm_list")
-        total_count = service.session.execute(count_query).scalar()
-        
-        # Get paginated results
-        query = text("""
-            SELECT id, name, "desc", orgs
-            FROM hm_list
-            ORDER BY name ASC
-            LIMIT :limit OFFSET :offset
-        """)
-        
-        offset = (page - 1) * per_page
-        result = service.session.execute(query, {
-            'limit': per_page,
-            'offset': offset
-        })
-        
-        players = []
-        for row in result:
-            players.append({
-                'id': row[0],
-                'name': row[1],
-                'desc': row[2],
-                'orgs': row[3]
-            })
+        total_count = service.count_hm_list()
+        players = service.get_hm_list_paginated(per_page, (page - 1) * per_page)
         
         return jsonify({
             'success': True,
@@ -500,34 +258,7 @@ def api_player_transactions(player_name):
     """Get all transactions for a specific market player"""
     service = DataService()
     try:
-        from sqlalchemy import text
-        
-        query = text("""
-            SELECT 
-                trade_date,
-                ts_code,
-                ts_name,
-                buy_amount,
-                sell_amount,
-                net_amount,
-                orgs
-            FROM hm_detail
-            WHERE name = :player_name
-            ORDER BY trade_date DESC
-        """)
-        
-        result = service.session.execute(query, {'player_name': player_name})
-        transactions = []
-        for row in result:
-            transactions.append({
-                'trade_date': row[0],
-                'ts_code': row[1],
-                'ts_name': row[2],
-                'buy_amount': row[3],
-                'sell_amount': row[4],
-                'net_amount': row[5],
-                'orgs': row[6]
-            })
+        transactions = service.get_player_transactions(player_name)
         
         return jsonify({
             'success': True,
@@ -554,33 +285,8 @@ def api_recent_hot_stocks():
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 20)) # Defaulting to 20 per page, similar to market players
         
-        from sqlalchemy import text
-        
-        # Get total count first
-        # Using 'recent_hot_stocks' as per user feedback
-        count_query = text("SELECT COUNT(DISTINCT ts_code) FROM recent_hot_stocks")
-        total_count = service.session.execute(count_query).scalar()
-        
-        # Get paginated results
-        query = text("""
-            SELECT DISTINCT ts_code, ts_name
-            FROM recent_hot_stocks
-            ORDER BY ts_code ASC -- Or any other relevant order
-            LIMIT :limit OFFSET :offset
-        """)
-        
-        offset = (page - 1) * per_page
-        result = service.session.execute(query, {
-            'limit': per_page,
-            'offset': offset
-        })
-        
-        hot_stocks = []
-        for row in result:
-            hot_stocks.append({
-                'ts_code': row[0],
-                'ts_name': row[1]
-            })
+        total_count = service.count_recent_hot_stocks()
+        hot_stocks = service.get_recent_hot_stocks_paginated(per_page, (page - 1) * per_page)
         
         return jsonify({
             'success': True,

@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}{{ holder_name }} - Shareholder Details{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="breadcrumb-item active">Shareholder Details</li>
+                </ol>
+            </nav>
+            
+            <div id="holderInfo">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Holdings</h5>
+                </div>
+                <div class="card-body">
+                    <div id="holdingsTable">
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const holderName = '{{ holder_name }}';
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadHolderDetails();
+});
+
+function loadHolderDetails() {
+    fetch(`/api/holders/${encodeURIComponent(holderName)}/tickers`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayHolderInfo(data.data);
+                displayHoldings(data.data.tickers);
+            } else {
+                showError('Failed to load holder details: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load holder details');
+        });
+}
+
+function displayHolderInfo(holder) {
+    const holderInfo = document.getElementById('holderInfo');
+    
+    holderInfo.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">${holder.holder_name}</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Shareholder Name:</strong> ${holder.holder_name}</p>
+                        <p><strong>Total Holdings:</strong> ${holder.tickers.length}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displayHoldings(tickers) {
+    const holdingsTable = document.getElementById('holdingsTable');
+    
+    if (tickers.length === 0) {
+        holdingsTable.innerHTML = '<div class="alert alert-info">No holdings found</div>';
+        return;
+    }
+    
+    const totalHoldings = tickers.length;
+    
+    holdingsTable.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ticker</th>
+                        <th>Company Name</th>
+                        <th>Shares Held</th>
+                        <th>Percentage</th>
+                        <th>Change</th>
+                        <th>Report Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tickers.map((ticker, index) => {
+                        // Generate Eastmoney URL based on ticker code
+                        let eastmoneyUrl = '';
+                        if (ticker.ts_code.endsWith('.SZ')) {
+                            const code = ticker.ts_code.replace('.SZ', '');
+                            eastmoneyUrl = `https://quote.eastmoney.com/sz${code}.html`;
+                        } else if (ticker.ts_code.endsWith('.SH')) {
+                            const code = ticker.ts_code.replace('.SH', '');
+                            eastmoneyUrl = `https://quote.eastmoney.com/sh${code}.html`;
+                        } else {
+                            eastmoneyUrl = `/ticker/${ticker.ts_code}`;
+                        }
+                        
+                        return `
+                        <tr>
+                            <td><span class="badge bg-primary">${index + 1}</span></td>
+                            <td>
+                                <a href="${eastmoneyUrl}" class="text-decoration-none" target="_blank">
+                                    ${ticker.ts_code}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="${eastmoneyUrl}" class="text-decoration-none" target="_blank">
+                                    ${ticker.name}
+                                </a>
+                            </td>
+                            <td class="text-end">${formatNumber(ticker.hold_amount)}</td>
+                            <td class="text-end">
+                                <span class="badge ${ticker.hold_ratio > 5 ? 'bg-danger' : ticker.hold_ratio > 2 ? 'bg-warning' : 'bg-success'}">
+                                    ${ticker.hold_ratio.toFixed(2)}%
+                                </span>
+                            </td>
+                            <td class="text-end ${ticker.hold_change > 0 ? 'text-success' : ticker.hold_change < 0 ? 'text-danger' : ''}">
+                                ${formatChange(ticker.hold_change)}
+                            </td>
+                            <td>${formatDate(ticker.end_date)}</td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <td colspan="3" class="text-end"><strong>Total Holdings:</strong></td>
+                        <td colspan="4"><strong>${totalHoldings}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+}
+
+function formatNumber(num) {
+    if (num === 0) return '0';
+    
+    if (num >= 100000000) {
+        return (num / 100000000).toFixed(2) + '亿';
+    } else if (num >= 10000) {
+        return (num / 10000).toFixed(2) + '万';
+    } else {
+        return num.toLocaleString();
+    }
+}
+
+function formatDate(dateStr) {
+    if (!dateStr || dateStr === 'nan') return 'N/A';
+    
+    try {
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const day = dateStr.substring(6, 8);
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function formatChange(change) {
+    if (!change || change === 0) return '0';
+    const sign = change > 0 ? '+' : '';
+    return sign + formatNumber(change);
+}
+
+function showError(message) {
+    document.getElementById('holderInfo').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+    document.getElementById('holdingsTable').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+}
+</script>
+{% endblock %}

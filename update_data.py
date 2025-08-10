@@ -19,6 +19,14 @@ def update_data():
         success, message = service.update_top_holders()
         print(f"Holders update: {message}")
         
+        # Update market players
+        success, message = service.update_hm_list()
+        print(f"Market players update: {message}")
+        
+        # Update player transactions
+        success, message = service.update_hm_detail()
+        print(f"Player transactions update: {message}")
+        
         print("Data update completed successfully!")
         
     except Exception as e:

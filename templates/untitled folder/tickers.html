@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Tickers with Multiple Holders - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Tickers with Multiple Individual Shareholders</h1>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+                    <h5 class="mb-0">Stock Tickers</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="updateInfo" class="text-muted small">Loading...</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <label for="perPageSelect" class="form-label">Items per page:</label>
+                            <select class="form-select form-select-sm" id="perPageSelect" style="width: auto; display: inline-block;" onchange="changePerPage()">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleMultipleHolders()">
+                                <span id="multipleHoldersBtn">Multiple Holders Only (≥2)</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="tickersTable">
+                            <thead>
+                                <tr>
+                                    <th>Stock Code</th>
+                                    <th>Stock Name</th>
+                                    <th>Area</th>
+                                    <th>Industry</th>
+                                    <th>Individual Holders</th>
+                                    <th>Latest Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tickersTableBody">
+                                <tr>
+                                    <td colspan="7" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Ticker pagination">
+                        <ul class="pagination justify-content-center" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load tickers on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadTickers();
+    loadUpdateInfo();
+});
+
+let currentPage = 1;
+let currentPerPage = 50;
+let currentMultipleHolders = false;
+
+function loadTickers() {
+    const tbody = document.getElementById('tickersTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+
+    const params = new URLSearchParams({
+        page: currentPage,
+        per_page: currentPerPage,
+        multiple_holders: currentMultipleHolders,
+        min_holders: 2
+    });
+
+    fetch(`/api/tickers?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTickers(data.data, data.pagination);
+            } else {
+                showError('Failed to load tickers: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load tickers');
+        });
+}
+
+function displayTickers(tickers, pagination) {
+    const tbody = document.getElementById('tickersTableBody');
+    
+    if (tickers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No tickers found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = tickers.map(ticker => `
+        <tr>
+            <td><strong>${ticker.ts_code}</strong></td>
+            <td><strong>${ticker.name}</strong></td>
+            <td>${ticker.area || '-'}</td>
+            <td>${ticker.industry || '-'}</td>
+            <td>
+                <span class="badge bg-primary">${ticker.holder_count}</span>
+            </td>
+            <td>${ticker.latest_holder_date || '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewTickerDetails('${ticker.ts_code}')">
+                    View Details
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    
+    displayPagination(pagination);
+}
+
+function displayPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    if (!paginationDiv) return;
+    
+    const { page, total_pages } = pagination;
+    let html = '';
+    
+    // Previous button
+    html += `
+        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page - 1})">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(total_pages, page + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${total_pages})">${total_pages}</a></li>`;
+    }
+    
+    // Next button
+    html += `
+        <li class="page-item ${page === total_pages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page + 1})">Next</a>
+        </li>
+    `;
+    
+    paginationDiv.innerHTML = html;
+}
+
+function changePage(newPage) {
+    if (newPage < 1) return;
+    currentPage = newPage;
+    loadTickers();
+}
+
+function changePerPage() {
+    const select = document.getElementById('perPageSelect');
+    currentPerPage = parseInt(select.value);
+    currentPage = 1;
+    loadTickers();
+}
+
+function toggleMultipleHolders() {
+    currentMultipleHolders = !currentMultipleHolders;
+    const btn = document.getElementById('multipleHoldersBtn');
+    btn.textContent = currentMultipleHolders ? 'All Tickers' : 'Multiple Holders Only (≥2)';
+    currentPage = 1;
+    loadTickers();
+}
+
+function viewTickerDetails(tsCode) {
+    window.location.href = `/ticker/${encodeURIComponent(tsCode)}`;
+}
+
+function loadUpdateInfo() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const info = data.data;
+                const holdersUpdate = info.holders.last_update_date || 'Never';
+                document.getElementById('updateInfo').textContent = 
+                    `Last updated: ${holdersUpdate}`;
+            }
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('tickersTableBody');
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}

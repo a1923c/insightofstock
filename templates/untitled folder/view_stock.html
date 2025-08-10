@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}View Stock - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+                    <li class="breadcrumb-item active">View Stock</li>
+                </ol>
+            </nav>
+            
+            <h1 class="mb-4">Stocks with Multiple Shareholders</h1>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background-color: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+                    <h5 class="mb-0">Stocks with Multiple Shareholders</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="updateInfo" class="text-muted small">Loading...</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <label for="perPageSelect" class="form-label">Items per page:</label>
+                            <select class="form-select form-select-sm" id="perPageSelect" style="width: auto; display: inline-block;" onchange="changePerPage()">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="minHoldersSelect" class="form-label">Min Holders:</label>
+                            <select class="form-select form-select-sm" id="minHoldersSelect" style="width: auto; display: inline-block;" onchange="changeMinHolders()">
+                                <option value="2" selected>2</option>
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="stocksTable">
+                            <thead>
+                                <tr>
+                                    <th>Stock Code</th>
+                                    <th>Stock Name</th>
+                                    <th>Area</th>
+                                    <th>Industry</th>
+                                    <th>Individual Holders</th>
+                                    <th>Latest Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stocksTableBody">
+                                <tr>
+                                    <td colspan="6" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Stock pagination">
+                        <ul class="pagination justify-content-center" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load stocks on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadStocks();
+    loadUpdateInfo();
+});
+
+let currentPage = 1;
+let currentPerPage = 50;
+let currentMinHolders = 2;
+
+function loadStocks() {
+    const tbody = document.getElementById('stocksTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+
+    const params = new URLSearchParams({
+        page: currentPage,
+        per_page: currentPerPage,
+        min_holders: currentMinHolders
+    });
+
+    fetch(`/api/stocks-with-multiple-holders?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayStocks(data.data, data.pagination);
+            } else {
+                showError('Failed to load stocks: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load stocks');
+        });
+}
+
+function displayStocks(stocks, pagination) {
+    const tbody = document.getElementById('stocksTableBody');
+    
+    if (stocks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No stocks found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = stocks.map(stock => `
+        <tr>
+            <td><strong>${stock.ts_code}</strong></td>
+            <td><strong>${stock.name}</strong></td>
+            <td>${stock.area || '-'}</td>
+            <td>${stock.industry || '-'}</td>
+            <td>
+                <button class="btn btn-link p-0" onclick="viewStockDetails('${stock.ts_code}')">
+                    <span class="badge bg-primary">${stock.holder_count}</span>
+                </button>
+            </td>
+            <td>${stock.latest_holder_date || '-'}</td>
+        </tr>
+    `).join('');
+    
+    displayPagination(pagination);
+}
+
+function displayPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    if (!paginationDiv) return;
+    
+    const { page, total_pages } = pagination;
+    let html = '';
+    
+    // Previous button
+    html += `
+        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page - 1})">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(total_pages, page + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${total_pages})">${total_pages}</a></li>`;
+    }
+    
+    // Next button
+    html += `
+        <li class="page-item ${page === total_pages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${page + 1})">Next</a>
+        </li>
+    `;
+    
+    paginationDiv.innerHTML = html;
+}
+
+function changePage(newPage) {
+    if (newPage < 1) return;
+    currentPage = newPage;
+    loadStocks();
+}
+
+function changePerPage() {
+    const select = document.getElementById('perPageSelect');
+    currentPerPage = parseInt(select.value);
+    currentPage = 1;
+    loadStocks();
+}
+
+function changeMinHolders() {
+    const select = document.getElementById('minHoldersSelect');
+    currentMinHolders = parseInt(select.value);
+    currentPage = 1;
+    loadStocks();
+}
+
+function viewStockDetails(tsCode) {
+    window.location.href = `/ticker/${encodeURIComponent(tsCode)}`;
+}
+
+function loadUpdateInfo() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const info = data.data;
+                const holdersUpdate = info.holders.last_update_date || 'Never';
+                document.getElementById('updateInfo').textContent = 
+                    `Last updated: ${holdersUpdate}`;
+            }
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('stocksTableBody');
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}

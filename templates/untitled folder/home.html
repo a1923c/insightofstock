@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Stock Market Insights</h1>
+            
+            <!-- Tab Navigation -->
+            <ul class="nav nav-tabs mb-4" id="homeTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="holders-tab" data-bs-toggle="tab" data-bs-target="#holders" type="button" role="tab" aria-controls="holders" aria-selected="true">Individual Shareholders</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="players-tab" data-bs-toggle="tab" data-bs-target="#players" type="button" role="tab" aria-controls="players" aria-selected="false">Market Players</button>
+                </li>
+            </ul>
+            
+            <!-- Tab Content -->
+            <div class="tab-content" id="homeTabsContent">
+                <!-- Individual Shareholders Tab -->
+                <div class="tab-pane fade show active" id="holders" role="tabpanel" aria-labelledby="holders-tab">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Top Individual Shareholders (自然人)</h5>
+                        <span id="totalHolders" class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <small class="text-light">Showing shareholders who own stocks in multiple companies</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="holdersTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Shareholder Name</th>
+                                            <th>Ticker Count</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="holdersTableBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center">
+                                                <div class="spinner-border" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Market Players Tab -->
+                <div class="tab-pane fade" id="players" role="tabpanel" aria-labelledby="players-tab">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Market Players</h5>
+                        <span id="totalPlayers" class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <small class="text-light">Showing market players and their trading activities</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="playersTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Player Name</th>
+                                            <th>Description</th>
+                                            <th>Organizations</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="playersTableBody">
+                                        <tr>
+                                            <td colspan="5" class="text-center">
+                                                <div class="spinner-border" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Statistics</h6>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Total Individual Shareholders:</strong> <span id="holderCount">-</span></p>
+                            <p><strong>Last Updated:</strong> <span id="lastUpdate">-</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Quick Actions</h6>
+                        </div>
+                        <div class="card-body">
+                            <a href="/tickers" class="btn btn-outline-primary btn-sm">Browse All Tickers</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load individual shareholders on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadIndividualHolders();
+    loadStats();
+    
+    // Add event listener for market players tab
+    document.getElementById('players-tab').addEventListener('shown.bs.tab', function (e) {
+        loadMarketPlayers();
+    });
+});
+
+function loadIndividualHolders() {
+    fetch('/api/holders')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayIndividualHolders(data.data);
+                document.getElementById('totalHolders').textContent = `${data.count} shareholders`;
+            } else {
+                showError('Failed to load shareholders: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load shareholders');
+        });
+}
+
+function displayIndividualHolders(holders) {
+    const tbody = document.getElementById('holdersTableBody');
+    
+    if (holders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center">No individual shareholders found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = holders.map((holder, index) => `
+        <tr>
+            <td><span class="badge bg-primary">${index + 1}</span></td>
+            <td>${holder.holder_name}</td>
+            <td>
+                <span class="badge bg-info">${holder.ticker_count}</span>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewHolderDetails('${encodeURIComponent(holder.holder_name)}')">
+                    View Holdings
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function loadMarketPlayers() {
+    // Check if players data is already loaded
+    if (document.getElementById('playersTableBody').children.length > 1) {
+        return;
+    }
+    
+    fetch('/api/market-players')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayMarketPlayers(data.data);
+                document.getElementById('totalPlayers').textContent = `${data.count} players`;
+            } else {
+                showPlayersError('Failed to load market players: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showPlayersError('Failed to load market players');
+        });
+}
+
+function displayMarketPlayers(players) {
+    const tbody = document.getElementById('playersTableBody');
+    
+    if (players.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No market players found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = players.map((player, index) => `
+        <tr>
+            <td><span class="badge bg-success">${index + 1}</span></td>
+            <td>${player.name}</td>
+            <td>${player.desc || '-'}</td>
+            <td>${player.orgs || '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-success" onclick="viewPlayerDetails('${encodeURIComponent(player.name)}')">
+                    View Transactions
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function viewHolderDetails(holderName) {
+    window.location.href = `/holder/${encodeURIComponent(holderName)}`;
+}
+
+function viewPlayerDetails(playerName) {
+    window.location.href = `/player/${encodeURIComponent(playerName)}`;
+}
+
+function loadStats() {
+    fetch('/api/update-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const holdersUpdate = data.data.holders.last_update_date || 'Never';
+                document.getElementById('lastUpdate').textContent = holdersUpdate;
+                document.getElementById('holderCount').textContent = 'Ready';
+            }
+        });
+}
+
+function showError(message) {
+    const tbody = document.getElementById('holdersTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">${message}</td></tr>`;
+}
+
+function showPlayersError(message) {
+    const tbody = document.getElementById('playersTableBody');
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">${message}</td></tr>`;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}{{ player_name }} - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="breadcrumb-item active">Player Details</li>
+                </ol>
+            </nav>
+            
+            <div id="playerInfo">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Transaction Details</h5>
+                </div>
+                <div class="card-body">
+                    <div id="transactionsTable">
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const playerName = '{{ player_name }}';
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlayerDetails();
+});
+
+function loadPlayerDetails() {
+    // URL encode the player name for the API call
+    const encodedPlayerName = encodeURIComponent(playerName);
+    
+    fetch(`/api/market-players/${encodedPlayerName}/transactions`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayPlayerInfo(data.data);
+                displayTransactions(data.data.transactions);
+            } else {
+                showError('Failed to load player details: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load player details');
+        });
+}
+
+function displayPlayerInfo(player) {
+    const playerInfo = document.getElementById('playerInfo');
+    
+    playerInfo.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">${player.player_name}</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <p><strong>Player Name:</strong> ${player.player_name}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displayTransactions(transactions) {
+    const transactionsTable = document.getElementById('transactionsTable');
+    
+    if (transactions.length === 0) {
+        transactionsTable.innerHTML = '<div class="alert alert-info">No transaction information available</div>';
+        return;
+    }
+    
+    const totalTransactions = transactions.length;
+    
+    transactionsTable.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Stock Code</th>
+                        <th>Stock Name</th>
+                        <th>Trade Date</th>
+                        <th>Buy Amount</th>
+                        <th>Sell Amount</th>
+                        <th>Net Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${transactions.map((transaction, index) => {
+                        // Generate Eastmoney URL based on ticker code
+                        let eastmoneyUrl = '';
+                        if (transaction.ts_code.endsWith('.SZ')) {
+                            const code = transaction.ts_code.replace('.SZ', '');
+                            eastmoneyUrl = `https://quote.eastmoney.com/sz${code}.html`;
+                        } else if (transaction.ts_code.endsWith('.SH')) {
+                            const code = transaction.ts_code.replace('.SH', '');
+                            eastmoneyUrl = `https://quote.eastmoney.com/sh${code}.html`;
+                        } else {
+                            eastmoneyUrl = `/ticker/${transaction.ts_code}`;
+                        }
+                        
+                        return `
+                        <tr>
+                            <td><span class="badge bg-primary">${index + 1}</span></td>
+                            <td>
+                                <a href="${eastmoneyUrl}" target="_blank">
+                                    ${transaction.ts_code}
+                                </a>
+                            </td>
+                            <td>${transaction.ts_name || '-'}</td>
+                            <td>${formatDate(transaction.trade_date)}</td>
+                            <td class="text-end">${formatCurrency(transaction.buy_amount || 0)}</td>
+                            <td class="text-end">${formatCurrency(transaction.sell_amount || 0)}</td>
+                            <td class="text-end">
+                                <span class="${(transaction.net_amount || 0) >= 0 ? 'text-success' : 'text-danger'}">
+                                    ${formatCurrency(transaction.net_amount || 0)}
+                                </span>
+                            </td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <td colspan="6" class="text-end"><strong>Total Transactions:</strong></td>
+                        <td><strong>${totalTransactions}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+}
+
+function formatNumber(num) {
+    if (num === 0) return '0';
+    
+    if (num >= 100000000) {
+        return (num / 100000000).toFixed(2) + '亿';
+    } else if (num >= 10000) {
+        return (num / 10000).toFixed(2) + '万';
+    } else {
+        return num.toLocaleString();
+    }
+}
+
+function formatCurrency(amount) {
+    const sign = amount < 0 ? '-' : '';
+    const absAmount = Math.abs(amount);
+    return sign + '¥' + formatNumber(absAmount);
+}
+
+function formatDate(dateStr) {
+    if (!dateStr || dateStr === 'nan') return 'N/A';
+    
+    try {
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const day = dateStr.substring(6, 8);
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function showError(message) {
+    document.getElementById('playerInfo').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+    document.getElementById('transactionsTable').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+}
+</script>
+{% endblock %}

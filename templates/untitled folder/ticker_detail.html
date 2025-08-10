@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}{{ ticker_name }} - Insight of Stock{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="breadcrumb-item active">Ticker Details</li>
+                </ol>
+            </nav>
+            
+            <div id="tickerInfo">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Top 10 Shareholders</h5>
+                </div>
+                <div class="card-body">
+                    <div id="holdersTable">
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const tsCode = '{{ ts_code }}';
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadTickerDetails();
+});
+
+function loadTickerDetails() {
+    fetch(`/api/tickers/${tsCode}/holders`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTickerInfo(data.data);
+                displayHolders(data.data.holders);
+            } else {
+                showError('Failed to load ticker details: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to load ticker details');
+        });
+}
+
+function displayTickerInfo(ticker) {
+    const tickerInfo = document.getElementById('tickerInfo');
+    
+    // Generate Eastmoney URL based on ticker code
+    let eastmoneyUrl = '';
+    if (ticker.ts_code.endsWith('.SZ')) {
+        const code = ticker.ts_code.replace('.SZ', '');
+        eastmoneyUrl = `https://quote.eastmoney.com/sz${code}.html`;
+    } else if (ticker.ts_code.endsWith('.SH')) {
+        const code = ticker.ts_code.replace('.SH', '');
+        eastmoneyUrl = `https://quote.eastmoney.com/sh${code}.html`;
+    } else {
+        eastmoneyUrl = `/ticker/${ticker.ts_code}`;
+    }
+    
+    tickerInfo.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0"><a href="${eastmoneyUrl}" target="_blank" class="text-white text-decoration-none">${ticker.name} (${ticker.symbol}) - ${ticker.ts_code}</a></h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Stock Code:</strong> <a href="${eastmoneyUrl}" target="_blank">${ticker.ts_code}</a></p>
+                        <p><strong>Symbol:</strong> ${ticker.symbol}</p>
+                        <p><strong>Company Name:</strong> <a href="${eastmoneyUrl}" target="_blank">${ticker.name}</a></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Area:</strong> ${ticker.area || 'N/A'}</p>
+                        <p><strong>Industry:</strong> ${ticker.industry || 'N/A'}</p>
+                        <p><strong>Listing Date:</strong> ${ticker.list_date || 'N/A'}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displayHolders(holders) {
+    const holdersTable = document.getElementById('holdersTable');
+    
+    if (holders.length === 0) {
+        holdersTable.innerHTML = '<div class="alert alert-info">No holder information available</div>';
+        return;
+    }
+    
+    const totalHolders = holders.length;
+    
+    holdersTable.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Shareholder Name</th>
+                        <th>Type</th>
+                        <th>Shares Held</th>
+                        <th>Percentage</th>
+                        <th>Change</th>
+                        <th>Report Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${holders.map((holder, index) => `
+                        <tr>
+                            <td><span class="badge bg-primary">${index + 1}</span></td>
+                            <td>${holder.holder_name}</td>
+                            <td>${formatHolderType(holder.holder_type)}</td>
+                            <td class="text-end">${formatNumber(holder.hold_amount)}</td>
+                            <td class="text-end">
+                                <span class="badge ${holder.hold_ratio > 5 ? 'bg-danger' : holder.hold_ratio > 2 ? 'bg-warning' : 'bg-success'}">
+                                    ${holder.hold_ratio.toFixed(2)}%
+                                </span>
+                            </td>
+                            <td class="text-end ${holder.hold_change > 0 ? 'text-success' : holder.hold_change < 0 ? 'text-danger' : ''}">
+                                ${formatChange(holder.hold_change)}
+                            </td>
+                            <td>${formatDate(holder.end_date)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <td colspan="4" class="text-end"><strong>Total Top Holders:</strong></td>
+                        <td colspan="4"><strong>${totalHolders}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+}
+
+function formatNumber(num) {
+    if (num === 0) return '0';
+    
+    if (num >= 100000000) {
+        return (num / 100000000).toFixed(2) + '亿';
+    } else if (num >= 10000) {
+        return (num / 10000).toFixed(2) + '万';
+    } else {
+        return num.toLocaleString();
+    }
+}
+
+function formatDate(dateStr) {
+    if (!dateStr || dateStr === 'nan') return 'N/A';
+    
+    try {
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const day = dateStr.substring(6, 8);
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function formatHolderType(typeStr) {
+    if (!typeStr) return 'N/A';
+    const types = {
+        'G': '个人',
+        'C': '机构',
+        'P': '私募',
+        'E': '信托',
+        'O': '其他',
+        '一般企业': '企业',
+        '投资公司': '投资',
+        '开放式投资基金': '基金',
+        '保险投资组合': '保险',
+        '自然人': '个人',
+        '风险投资公司': '风投',
+        '资产管理公司': '资管'
+    };
+    return types[typeStr] || typeStr;
+}
+
+function formatChange(change) {
+    if (!change || change === 0) return '0';
+    const sign = change > 0 ? '+' : '';
+    return sign + formatNumber(change);
+}
+
+function showError(message) {
+    document.getElementById('tickerInfo').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+    document.getElementById('holdersTable').innerHTML = `
+        <div class="alert alert-danger">${message}</div>
+    `;
+}
+</script>
+{% endblock %}

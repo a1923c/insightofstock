@@ -565,6 +565,309 @@ class TushareService:
             print(f"Error fetching income statement for {ts_code}: {e}")
             return []
 
+    def get_fina_indicator(self, ts_code, start_date='', end_date='', fields=''):
+        """
+        Get financial indicator data from Tushare
+        Reference: https://tushare.pro/document/2?doc_id=79
+        """
+        try:
+            # Get financial indicator data
+            df = self.pro.fina_indicator_vip(
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+                fields=fields if fields else 'ts_code,ann_date,end_date,eps,dt_eps,total_revenue_ps,revenue_ps,capital_rese_ps,surplus_rese_ps,undist_profit_ps,extra_item,profit_dedt,gross_margin,current_ratio,quick_ratio,cash_ratio,invturn_days,arturn_days,inv_turn,ar_turn,ca_turn,fa_turn,assets_turn,op_income,valuechange_income,interst_income,daa,ebit,ebitda,fcff,fcfe,current_exint,noncurrent_exint,interestdebt,netdebt,tangible_asset,working_capital,networking_capital,invest_capital,retained_earnings,diluted2_eps,bps,ocfps,retainedps,cfps,ebit_ps,fcff_ps,fcfe_ps,netprofit_margin,grossprofit_margin,cogs_of_sales,expense_of_sales,profit_to_gr,saleexp_to_gr,adminexp_of_gr,finaexp_of_gr,impai_ttm,gc_of_gr,op_of_gr,ebit_of_gr,roe,roe_waa,roe_dt,roa,npta,roic,roe_yearly,roa2_yearly,roe_avg,opincome_of_ebt,investincome_of_ebt,n_op_profit_of_ebt,tax_to_ebt,dtprofit_to_profit,salescash_to_or,ocf_to_or,ocf_to_opincome,capitalized_to_da,debt_to_assets,assets_to_eqt,dp_assets_to_eqt,ca_to_assets,nca_to_assets,tbassets_to_total_assets,int_to_talcap,eqt_to_talcapital,currentdebt_to_debt,longdeb_to_debt,ocf_to_shortdebt,debt_to_eqt,eqt_to_debt,eqt_to_interestdebt,tangibleasset_to_debt,tangasset_to_intdebt,tangibleasset_to_netdebt,ocf_to_debt,ocf_to_interestdebt,ocf_to_netdebt,ebit_to_interest,long_debt_to_working_capital,ebitda_to_debt,turn_days,roa_yearly,roa_dp,fixed_assets,profit_prefin_exp,non_op_profit,op_to_ebt,nop_to_ebt,ocf_to_profit,cash_to_liqdebt,cash_to_liqdebt_withinterest,op_to_liqdebt,op_to_debt,roic_yearly,total_fa_trun,profit_to_op,q_opincome,q_investincome,q_dtprofit,q_eps,q_netprofit_margin,q_gsprofit_margin,q_exp_to_sales,q_profit_to_gr,q_saleexp_to_gr,q_adminexp_to_gr,q_finaexp_to_gr,q_impair_to_gr,q_gc_to_gr,q_op_to_gr,q_roe,q_dt_roe,q_npta,q_opincome_to_ebt,q_investincome_to_ebt,q_dtprofit_to_profit,q_salescash_to_or,q_ocf_to_sales,q_ocf_to_opincome,basic_eps_yoy,dt_eps_yoy,cfps_yoy,op_yoy,ebt_yoy,netprofit_yoy,dt_netprofit_yoy,ocf_yoy,roe_yoy,bps_yoy,assets_yoy,eqt_yoy,tr_yoy,or_yoy,q_gr_yoy,q_gr_qoq,q_sales_yoy,q_sales_qoq,q_op_yoy,q_op_qoq,q_profit_yoy,q_profit_qoq,q_netprofit_yoy,q_netprofit_qoq,equity_yoy,tr_total,profit_total,netprofit_total,netprofit_attr_p_total,or_total,q_sales_chg,q_op_chg,q_netprofit_chg,q_netprofit_attr_p_chg,q_profit_chg,q_gr_chg,update_flag'
+            )
+            
+            if df.empty:
+                return []
+            
+            # Convert DataFrame to list of dictionaries
+            fina_indicator_data = []
+            for _, row in df.iterrows():
+                fina_indicator_data.append({
+                    'ts_code': row['ts_code'] if 'ts_code' in row else '',
+                    'ann_date': str(row['ann_date']) if pd.notna(row.get('ann_date')) else '',
+                    'end_date': str(row['end_date']) if pd.notna(row.get('end_date')) else '',
+                    'eps': float(row['eps']) if pd.notna(row.get('eps')) else 0.0,
+                    'dt_eps': float(row['dt_eps']) if pd.notna(row.get('dt_eps')) else 0.0,
+                    'total_revenue_ps': float(row['total_revenue_ps']) if pd.notna(row.get('total_revenue_ps')) else 0.0,
+                    'revenue_ps': float(row['revenue_ps']) if pd.notna(row.get('revenue_ps')) else 0.0,
+                    'capital_rese_ps': float(row['capital_rese_ps']) if pd.notna(row.get('capital_rese_ps')) else 0.0,
+                    'surplus_rese_ps': float(row['surplus_rese_ps']) if pd.notna(row.get('surplus_rese_ps')) else 0.0,
+                    'undist_profit_ps': float(row['undist_profit_ps']) if pd.notna(row.get('undist_profit_ps')) else 0.0,
+                    'extra_item': float(row['extra_item']) if pd.notna(row.get('extra_item')) else 0.0,
+                    'profit_dedt': float(row['profit_dedt']) if pd.notna(row.get('profit_dedt')) else 0.0,
+                    'gross_margin': float(row['gross_margin']) if pd.notna(row.get('gross_margin')) else 0.0,
+                    'current_ratio': float(row['current_ratio']) if pd.notna(row.get('current_ratio')) else 0.0,
+                    'quick_ratio': float(row['quick_ratio']) if pd.notna(row.get('quick_ratio')) else 0.0,
+                    'cash_ratio': float(row['cash_ratio']) if pd.notna(row.get('cash_ratio')) else 0.0,
+                    'invturn_days': float(row['invturn_days']) if pd.notna(row.get('invturn_days')) else 0.0,
+                    'arturn_days': float(row['arturn_days']) if pd.notna(row.get('arturn_days')) else 0.0,
+                    'inv_turn': float(row['inv_turn']) if pd.notna(row.get('inv_turn')) else 0.0,
+                    'ar_turn': float(row['ar_turn']) if pd.notna(row.get('ar_turn')) else 0.0,
+                    'ca_turn': float(row['ca_turn']) if pd.notna(row.get('ca_turn')) else 0.0,
+                    'fa_turn': float(row['fa_turn']) if pd.notna(row.get('fa_turn')) else 0.0,
+                    'assets_turn': float(row['assets_turn']) if pd.notna(row.get('assets_turn')) else 0.0,
+                    'op_income': float(row['op_income']) if pd.notna(row.get('op_income')) else 0.0,
+                    'valuechange_income': float(row['valuechange_income']) if pd.notna(row.get('valuechange_income')) else 0.0,
+                    'interst_income': float(row['interst_income']) if pd.notna(row.get('interst_income')) else 0.0,
+                    'daa': float(row['daa']) if pd.notna(row.get('daa')) else 0.0,
+                    'ebit': float(row['ebit']) if pd.notna(row.get('ebit')) else 0.0,
+                    'ebitda': float(row['ebitda']) if pd.notna(row.get('ebitda')) else 0.0,
+                    'fcff': float(row['fcff']) if pd.notna(row.get('fcff')) else 0.0,
+                    'fcfe': float(row['fcfe']) if pd.notna(row.get('fcfe')) else 0.0,
+                    'current_exint': float(row['current_exint']) if pd.notna(row.get('current_exint')) else 0.0,
+                    'noncurrent_exint': float(row['noncurrent_exint']) if pd.notna(row.get('noncurrent_exint')) else 0.0,
+                    'interestdebt': float(row['interestdebt']) if pd.notna(row.get('interestdebt')) else 0.0,
+                    'netdebt': float(row['netdebt']) if pd.notna(row.get('netdebt')) else 0.0,
+                    'tangible_asset': float(row['tangible_asset']) if pd.notna(row.get('tangible_asset')) else 0.0,
+                    'working_capital': float(row['working_capital']) if pd.notna(row.get('working_capital')) else 0.0,
+                    'networking_capital': float(row['networking_capital']) if pd.notna(row.get('networking_capital')) else 0.0,
+                    'invest_capital': float(row['invest_capital']) if pd.notna(row.get('invest_capital')) else 0.0,
+                    'retained_earnings': float(row['retained_earnings']) if pd.notna(row.get('retained_earnings')) else 0.0,
+                    'diluted2_eps': float(row['diluted2_eps']) if pd.notna(row.get('diluted2_eps')) else 0.0,
+                    'bps': float(row['bps']) if pd.notna(row.get('bps')) else 0.0,
+                    'ocfps': float(row['ocfps']) if pd.notna(row.get('ocfps')) else 0.0,
+                    'retainedps': float(row['retainedps']) if pd.notna(row.get('retainedps')) else 0.0,
+                    'cfps': float(row['cfps']) if pd.notna(row.get('cfps')) else 0.0,
+                    'ebit_ps': float(row['ebit_ps']) if pd.notna(row.get('ebit_ps')) else 0.0,
+                    'fcff_ps': float(row['fcff_ps']) if pd.notna(row.get('fcff_ps')) else 0.0,
+                    'fcfe_ps': float(row['fcfe_ps']) if pd.notna(row.get('fcfe_ps')) else 0.0,
+                    'netprofit_margin': float(row['netprofit_margin']) if pd.notna(row.get('netprofit_margin')) else 0.0,
+                    'grossprofit_margin': float(row['grossprofit_margin']) if pd.notna(row.get('grossprofit_margin')) else 0.0,
+                    'cogs_of_sales': float(row['cogs_of_sales']) if pd.notna(row.get('cogs_of_sales')) else 0.0,
+                    'expense_of_sales': float(row['expense_of_sales']) if pd.notna(row.get('expense_of_sales')) else 0.0,
+                    'profit_to_gr': float(row['profit_to_gr']) if pd.notna(row.get('profit_to_gr')) else 0.0,
+                    'saleexp_to_gr': float(row['saleexp_to_gr']) if pd.notna(row.get('saleexp_to_gr')) else 0.0,
+                    'adminexp_of_gr': float(row['adminexp_of_gr']) if pd.notna(row.get('adminexp_of_gr')) else 0.0,
+                    'finaexp_of_gr': float(row['finaexp_of_gr']) if pd.notna(row.get('finaexp_of_gr')) else 0.0,
+                    'impai_ttm': float(row['impai_ttm']) if pd.notna(row.get('impai_ttm')) else 0.0,
+                    'gc_of_gr': float(row['gc_of_gr']) if pd.notna(row.get('gc_of_gr')) else 0.0,
+                    'op_of_gr': float(row['op_of_gr']) if pd.notna(row.get('op_of_gr')) else 0.0,
+                    'ebit_of_gr': float(row['ebit_of_gr']) if pd.notna(row.get('ebit_of_gr')) else 0.0,
+                    'roe': float(row['roe']) if pd.notna(row.get('roe')) else 0.0,
+                    'roe_waa': float(row['roe_waa']) if pd.notna(row.get('roe_waa')) else 0.0,
+                    'roe_dt': float(row['roe_dt']) if pd.notna(row.get('roe_dt')) else 0.0,
+                    'roa': float(row['roa']) if pd.notna(row.get('roa')) else 0.0,
+                    'npta': float(row['npta']) if pd.notna(row.get('npta')) else 0.0,
+                    'roic': float(row['roic']) if pd.notna(row.get('roic')) else 0.0,
+                    'roe_yearly': float(row['roe_yearly']) if pd.notna(row.get('roe_yearly')) else 0.0,
+                    'roa2_yearly': float(row['roa2_yearly']) if pd.notna(row.get('roa2_yearly')) else 0.0,
+                    'roe_avg': float(row['roe_avg']) if pd.notna(row.get('roe_avg')) else 0.0,
+                    'opincome_of_ebt': float(row['opincome_of_ebt']) if pd.notna(row.get('opincome_of_ebt')) else 0.0,
+                    'investincome_of_ebt': float(row['investincome_of_ebt']) if pd.notna(row.get('investincome_of_ebt')) else 0.0,
+                    'n_op_profit_of_ebt': float(row['n_op_profit_of_ebt']) if pd.notna(row.get('n_op_profit_of_ebt')) else 0.0,
+                    'tax_to_ebt': float(row['tax_to_ebt']) if pd.notna(row.get('tax_to_ebt')) else 0.0,
+                    'dtprofit_to_profit': float(row['dtprofit_to_profit']) if pd.notna(row.get('dtprofit_to_profit')) else 0.0,
+                    'salescash_to_or': float(row['salescash_to_or']) if pd.notna(row.get('salescash_to_or')) else 0.0,
+                    'ocf_to_or': float(row['ocf_to_or']) if pd.notna(row.get('ocf_to_or')) else 0.0,
+                    'ocf_to_opincome': float(row['ocf_to_opincome']) if pd.notna(row.get('ocf_to_opincome')) else 0.0,
+                    'capitalized_to_da': float(row['capitalized_to_da']) if pd.notna(row.get('capitalized_to_da')) else 0.0,
+                    'debt_to_assets': float(row['debt_to_assets']) if pd.notna(row.get('debt_to_assets')) else 0.0,
+                    'assets_to_eqt': float(row['assets_to_eqt']) if pd.notna(row.get('assets_to_eqt')) else 0.0,
+                    'dp_assets_to_eqt': float(row['dp_assets_to_eqt']) if pd.notna(row.get('dp_assets_to_eqt')) else 0.0,
+                    'ca_to_assets': float(row['ca_to_assets']) if pd.notna(row.get('ca_to_assets')) else 0.0,
+                    'nca_to_assets': float(row['nca_to_assets']) if pd.notna(row.get('nca_to_assets')) else 0.0,
+                    'tbassets_to_total_assets': float(row['tbassets_to_total_assets']) if pd.notna(row.get('tbassets_to_total_assets')) else 0.0,
+                    'int_to_talcap': float(row['int_to_talcap']) if pd.notna(row.get('int_to_talcap')) else 0.0,
+                    'eqt_to_talcapital': float(row['eqt_to_talcapital']) if pd.notna(row.get('eqt_to_talcapital')) else 0.0,
+                    'currentdebt_to_debt': float(row['currentdebt_to_debt']) if pd.notna(row.get('currentdebt_to_debt')) else 0.0,
+                    'longdeb_to_debt': float(row['longdeb_to_debt']) if pd.notna(row.get('longdeb_to_debt')) else 0.0,
+                    'ocf_to_shortdebt': float(row['ocf_to_shortdebt']) if pd.notna(row.get('ocf_to_shortdebt')) else 0.0,
+                    'debt_to_eqt': float(row['debt_to_eqt']) if pd.notna(row.get('debt_to_eqt')) else 0.0,
+                    'eqt_to_debt': float(row['eqt_to_debt']) if pd.notna(row.get('eqt_to_debt')) else 0.0,
+                    'eqt_to_interestdebt': float(row['eqt_to_interestdebt']) if pd.notna(row.get('eqt_to_interestdebt')) else 0.0,
+                    'tangibleasset_to_debt': float(row['tangibleasset_to_debt']) if pd.notna(row.get('tangibleasset_to_debt')) else 0.0,
+                    'tangasset_to_intdebt': float(row['tangasset_to_intdebt']) if pd.notna(row.get('tangasset_to_intdebt')) else 0.0,
+                    'tangibleasset_to_netdebt': float(row['tangibleasset_to_netdebt']) if pd.notna(row.get('tangibleasset_to_netdebt')) else 0.0,
+                    'ocf_to_debt': float(row['ocf_to_debt']) if pd.notna(row.get('ocf_to_debt')) else 0.0,
+                    'ocf_to_interestdebt': float(row['ocf_to_interestdebt']) if pd.notna(row.get('ocf_to_interestdebt')) else 0.0,
+                    'ocf_to_netdebt': float(row['ocf_to_netdebt']) if pd.notna(row.get('ocf_to_netdebt')) else 0.0,
+                    'ebit_to_interest': float(row['ebit_to_interest']) if pd.notna(row.get('ebit_to_interest')) else 0.0,
+                    'long_debt_to_working_capital': float(row['long_debt_to_working_capital']) if pd.notna(row.get('long_debt_to_working_capital')) else 0.0,
+                    'ebitda_to_debt': float(row['ebitda_to_debt']) if pd.notna(row.get('ebitda_to_debt')) else 0.0,
+                    'turn_days': float(row['turn_days']) if pd.notna(row.get('turn_days')) else 0.0,
+                    'roa_yearly': float(row['roa_yearly']) if pd.notna(row.get('roa_yearly')) else 0.0,
+                    'roa_dp': float(row['roa_dp']) if pd.notna(row.get('roa_dp')) else 0.0,
+                    'fixed_assets': float(row['fixed_assets']) if pd.notna(row.get('fixed_assets')) else 0.0,
+                    'profit_prefin_exp': float(row['profit_prefin_exp']) if pd.notna(row.get('profit_prefin_exp')) else 0.0,
+                    'non_op_profit': float(row['non_op_profit']) if pd.notna(row.get('non_op_profit')) else 0.0,
+                    'op_to_ebt': float(row['op_to_ebt']) if pd.notna(row.get('op_to_ebt')) else 0.0,
+                    'nop_to_ebt': float(row['nop_to_ebt']) if pd.notna(row.get('nop_to_ebt')) else 0.0,
+                    'ocf_to_profit': float(row['ocf_to_profit']) if pd.notna(row.get('ocf_to_profit')) else 0.0,
+                    'cash_to_liqdebt': float(row['cash_to_liqdebt']) if pd.notna(row.get('cash_to_liqdebt')) else 0.0,
+                    'cash_to_liqdebt_withinterest': float(row['cash_to_liqdebt_withinterest']) if pd.notna(row.get('cash_to_liqdebt_withinterest')) else 0.0,
+                    'op_to_liqdebt': float(row['op_to_liqdebt']) if pd.notna(row.get('op_to_liqdebt')) else 0.0,
+                    'op_to_debt': float(row['op_to_debt']) if pd.notna(row.get('op_to_debt')) else 0.0,
+                    'roic_yearly': float(row['roic_yearly']) if pd.notna(row.get('roic_yearly')) else 0.0,
+                    'total_fa_trun': float(row['total_fa_trun']) if pd.notna(row.get('total_fa_trun')) else 0.0,
+                    'profit_to_op': float(row['profit_to_op']) if pd.notna(row.get('profit_to_op')) else 0.0,
+                    'q_opincome': float(row['q_opincome']) if pd.notna(row.get('q_opincome')) else 0.0,
+                    'q_investincome': float(row['q_investincome']) if pd.notna(row.get('q_investincome')) else 0.0,
+                    'q_dtprofit': float(row['q_dtprofit']) if pd.notna(row.get('q_dtprofit')) else 0.0,
+                    'q_eps': float(row['q_eps']) if pd.notna(row.get('q_eps')) else 0.0,
+                    'q_netprofit_margin': float(row['q_netprofit_margin']) if pd.notna(row.get('q_netprofit_margin')) else 0.0,
+                    'q_gsprofit_margin': float(row['q_gsprofit_margin']) if pd.notna(row.get('q_gsprofit_margin')) else 0.0,
+                    'q_exp_to_sales': float(row['q_exp_to_sales']) if pd.notna(row.get('q_exp_to_sales')) else 0.0,
+                    'q_profit_to_gr': float(row['q_profit_to_gr']) if pd.notna(row.get('q_profit_to_gr')) else 0.0,
+                    'q_saleexp_to_gr': float(row['q_saleexp_to_gr']) if pd.notna(row.get('q_saleexp_to_gr')) else 0.0,
+                    'q_adminexp_to_gr': float(row['q_adminexp_to_gr']) if pd.notna(row.get('q_adminexp_to_gr')) else 0.0,
+                    'q_finaexp_to_gr': float(row['q_finaexp_to_gr']) if pd.notna(row.get('q_finaexp_to_gr')) else 0.0,
+                    'q_impair_to_gr': float(row['q_impair_to_gr']) if pd.notna(row.get('q_impair_to_gr')) else 0.0,
+                    'q_gc_to_gr': float(row['q_gc_to_gr']) if pd.notna(row.get('q_gc_to_gr')) else 0.0,
+                    'q_op_to_gr': float(row['q_op_to_gr']) if pd.notna(row.get('q_op_to_gr')) else 0.0,
+                    'q_roe': float(row['q_roe']) if pd.notna(row.get('q_roe')) else 0.0,
+                    'q_dt_roe': float(row['q_dt_roe']) if pd.notna(row.get('q_dt_roe')) else 0.0,
+                    'q_npta': float(row['q_npta']) if pd.notna(row.get('q_npta')) else 0.0,
+                    'q_opincome_to_ebt': float(row['q_opincome_to_ebt']) if pd.notna(row.get('q_opincome_to_ebt')) else 0.0,
+                    'q_investincome_to_ebt': float(row['q_investincome_to_ebt']) if pd.notna(row.get('q_investincome_to_ebt')) else 0.0,
+                    'q_dtprofit_to_profit': float(row['q_dtprofit_to_profit']) if pd.notna(row.get('q_dtprofit_to_profit')) else 0.0,
+                    'q_salescash_to_or': float(row['q_salescash_to_or']) if pd.notna(row.get('q_salescash_to_or')) else 0.0,
+                    'q_ocf_to_sales': float(row['q_ocf_to_sales']) if pd.notna(row.get('q_ocf_to_sales')) else 0.0,
+                    'q_ocf_to_opincome': float(row['q_ocf_to_opincome']) if pd.notna(row.get('q_ocf_to_opincome')) else 0.0,
+                    'basic_eps_yoy': float(row['basic_eps_yoy']) if pd.notna(row.get('basic_eps_yoy')) else 0.0,
+                    'dt_eps_yoy': float(row['dt_eps_yoy']) if pd.notna(row.get('dt_eps_yoy')) else 0.0,
+                    'cfps_yoy': float(row['cfps_yoy']) if pd.notna(row.get('cfps_yoy')) else 0.0,
+                    'op_yoy': float(row['op_yoy']) if pd.notna(row.get('op_yoy')) else 0.0,
+                    'ebt_yoy': float(row['ebt_yoy']) if pd.notna(row.get('ebt_yoy')) else 0.0,
+                    'netprofit_yoy': float(row['netprofit_yoy']) if pd.notna(row.get('netprofit_yoy')) else 0.0,
+                    'dt_netprofit_yoy': float(row['dt_netprofit_yoy']) if pd.notna(row.get('dt_netprofit_yoy')) else 0.0,
+                    'ocf_yoy': float(row['ocf_yoy']) if pd.notna(row.get('ocf_yoy')) else 0.0,
+                    'roe_yoy': float(row['roe_yoy']) if pd.notna(row.get('roe_yoy')) else 0.0,
+                    'bps_yoy': float(row['bps_yoy']) if pd.notna(row.get('bps_yoy')) else 0.0,
+                    'assets_yoy': float(row['assets_yoy']) if pd.notna(row.get('assets_yoy')) else 0.0,
+                    'eqt_yoy': float(row['eqt_yoy']) if pd.notna(row.get('eqt_yoy')) else 0.0,
+                    'tr_yoy': float(row['tr_yoy']) if pd.notna(row.get('tr_yoy')) else 0.0,
+                    'or_yoy': float(row['or_yoy']) if pd.notna(row.get('or_yoy')) else 0.0,
+                    'q_gr_yoy': float(row['q_gr_yoy']) if pd.notna(row.get('q_gr_yoy')) else 0.0,
+                    'q_gr_qoq': float(row['q_gr_qoq']) if pd.notna(row.get('q_gr_qoq')) else 0.0,
+                    'q_sales_yoy': float(row['q_sales_yoy']) if pd.notna(row.get('q_sales_yoy')) else 0.0,
+                    'q_sales_qoq': float(row['q_sales_qoq']) if pd.notna(row.get('q_sales_qoq')) else 0.0,
+                    'q_op_yoy': float(row['q_op_yoy']) if pd.notna(row.get('q_op_yoy')) else 0.0,
+                    'q_op_qoq': float(row['q_op_qoq']) if pd.notna(row.get('q_op_qoq')) else 0.0,
+                    'q_profit_yoy': float(row['q_profit_yoy']) if pd.notna(row.get('q_profit_yoy')) else 0.0,
+                    'q_profit_qoq': float(row['q_profit_qoq']) if pd.notna(row.get('q_profit_qoq')) else 0.0,
+                    'q_netprofit_yoy': float(row['q_netprofit_yoy']) if pd.notna(row.get('q_netprofit_yoy')) else 0.0,
+                    'q_netprofit_qoq': float(row['q_netprofit_qoq']) if pd.notna(row.get('q_netprofit_qoq')) else 0.0,
+                    'equity_yoy': float(row['equity_yoy']) if pd.notna(row.get('equity_yoy')) else 0.0,
+                    'tr_total': float(row['tr_total']) if pd.notna(row.get('tr_total')) else 0.0,
+                    'profit_total': float(row['profit_total']) if pd.notna(row.get('profit_total')) else 0.0,
+                    'netprofit_total': float(row['netprofit_total']) if pd.notna(row.get('netprofit_total')) else 0.0,
+                    'netprofit_attr_p_total': float(row['netprofit_attr_p_total']) if pd.notna(row.get('netprofit_attr_p_total')) else 0.0,
+                    'or_total': float(row['or_total']) if pd.notna(row.get('or_total')) else 0.0,
+                    'q_sales_chg': float(row['q_sales_chg']) if pd.notna(row.get('q_sales_chg')) else 0.0,
+                    'q_op_chg': float(row['q_op_chg']) if pd.notna(row.get('q_op_chg')) else 0.0,
+                    'q_netprofit_chg': float(row['q_netprofit_chg']) if pd.notna(row.get('q_netprofit_chg')) else 0.0,
+                    'q_netprofit_attr_p_chg': float(row['q_netprofit_attr_p_chg']) if pd.notna(row.get('q_netprofit_attr_p_chg')) else 0.0,
+                    'q_profit_chg': float(row['q_profit_chg']) if pd.notna(row.get('q_profit_chg')) else 0.0,
+                    'q_gr_chg': float(row['q_gr_chg']) if pd.notna(row.get('q_gr_chg')) else 0.0,
+                    'update_flag': float(row['update_flag']) if pd.notna(row.get('update_flag')) else 0.0
+                })
+            
+            return fina_indicator_data
+            
+        except Exception as e:
+            print(f"Error fetching financial indicator for {ts_code}: {e}")
+            return []
+
+    def get_daily_basic(self, ts_code='', start_date='', end_date='', fields=''):
+        """
+        Get daily_basic data from Tushare
+        Reference: https://tushare.pro/document/2?doc_id=32
+        """
+        try:
+            df = self.pro.daily_basic(
+                ts_code=ts_code,
+                fields=fields if fields else 'ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pb,total_share,float_share,free_share,total_mv,circ_mv'
+            )
+            if df.empty:
+                return []
+            daily_basic_data = []
+            for _, row in df.iterrows():
+                daily_basic_data.append({
+                    'ts_code': row['ts_code'],
+                    'trade_date': str(row['trade_date']) if pd.notna(row['trade_date']) else '',
+                    'close': float(row['close']) if pd.notna(row.get('close')) else 0.0,
+                    'turnover_rate': float(row['turnover_rate']) if pd.notna(row.get('turnover_rate')) else 0.0,
+                    'volume_ratio': float(row['volume_ratio']) if pd.notna(row.get('volume_ratio')) else 0.0,
+                    'pe': float(row['pe']) if pd.notna(row.get('pe')) else 0.0,
+                    'pb': float(row['pb']) if pd.notna(row.get('pb')) else 0.0,
+                    'total_share': float(row['total_share']) if pd.notna(row.get('total_share')) else 0.0,
+                    'float_share': float(row['float_share']) if pd.notna(row.get('float_share')) else 0.0,
+                    'free_share': float(row['free_share']) if pd.notna(row.get('free_share')) else 0.0,
+                    'total_mv': float(row['total_mv']) if pd.notna(row.get('total_mv')) else 0.0,
+                    'circ_mv': float(row['circ_mv']) if pd.notna(row.get('circ_mv')) else 0.0
+                })
+            return daily_basic_data
+        except Exception as e:
+            print(f"Error fetching daily_basic: {e}")
+            return []
+
+    def get_ths_hot(self, **kwargs):
+        """
+        Fetch ths_hot (同花顺热点) data from Tushare.
+        API: https://tushare.pro/document/2?doc_id=320
+        """
+        try:
+            df = self.pro.ths_hot(
+                **kwargs,
+                fields="trade_date,data_type,ts_code,ts_name,rank,pct_change,current_price,concept,rank_reason,hot,rank_time"
+            )
+            if df.empty:
+                return []
+            ths_hot_data = []
+            for _, row in df.iterrows():
+                ths_hot_data.append({
+                    'trade_date': row['trade_date'],
+                    'data_type': row['data_type'],
+                    'ts_code': row['ts_code'],
+                    'ts_name': row['ts_name'] if 'ts_name' in row else '',
+                    'rank': int(row['rank']) if pd.notna(row.get('rank')) else None,
+                    'pct_change': float(row['pct_change']) if pd.notna(row.get('pct_change')) else None,
+                    'current_price': float(row['current_price']) if pd.notna(row.get('current_price')) else None,
+                    'concept': row['concept'] if 'concept' in row else '',
+                    'rank_reason': row['rank_reason'] if 'rank_reason' in row else '',
+                    'hot': float(row['hot']) if pd.notna(row.get('hot')) else None,
+                    'rank_time': row['rank_time'] if 'rank_time' in row else ''
+                })
+            return ths_hot_data
+        except Exception as e:
+            print(f"Error fetching ths_hot: {e}")
+            return []
+
+    def get_dc_hot(self, **kwargs):
+        """
+        Fetch dc_hot (东方财富热点) data from Tushare.
+        API: https://tushare.pro/document/2?doc_id=321
+        kwargs can include params like ts_code, in_date, out_date, etc.
+        """
+        try:
+            df = self.pro.dc_hot(
+                **kwargs,
+                fields="trade_date,data_type,ts_code,ts_name,rank,pct_change,current_price,concept,hot,rank_time"
+            )
+            if df.empty:
+                return []
+            dc_hot_data = []
+            for _, row in df.iterrows():
+                dc_hot_data.append({
+                    'trade_date': row['trade_date'],
+                    'data_type': row['data_type'],
+                    'ts_code': row['ts_code'],
+                    'ts_name': row['ts_name'] if 'ts_name' in row else '',
+                    'rank': int(row['rank']) if pd.notna(row.get('rank')) else None,
+                    'pct_change': float(row['pct_change']) if pd.notna(row.get('pct_change')) else None,
+                    'current_price': float(row['current_price']) if pd.notna(row.get('current_price')) else None,
+                    'concept': row['concept'] if 'concept' in row else '',
+                    'hot': float(row['hot']) if pd.notna(row.get('hot')) else None,
+                    'rank_time': row['rank_time'] if 'rank_time' in row else ''
+                })
+            return dc_hot_data
+        except Exception as e:
+            print(f"Error fetching dc_hot: {e}")
+            return []
+
 if __name__ == "__main__":
     # Test the service
     service = TushareService()
