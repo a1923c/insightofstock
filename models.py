@@ -8,18 +8,36 @@ from dotenv import load_dotenv
 
 load_dotenv('.env')
 
+""" 
+1. tickers - Stock ticker information and basic company details
+2. top_holders - Top shareholders data for each stock
+3. hm_list - Market players/institutions list
+4. hm_detail - Player transaction details and activities
+5. balance_sheets - Financial balance sheets data
+6. cash_flows - Cash flow statements
+7. income_statements - Income and profit statements
+8. fina_indicators - Key financial indicators and ratios
+9. daily_basic - Daily basic market data and trading info
+10. ths_hot - THS hot concept and theme data
+11. dc_hot - DC hot concept and market attention data
+12. daily - Daily market data
+13. adj_factor - Adjust factors for stock prices
+14. dividend - Dividend data
+15. index_daily -  Index daily data
+"""
+
 Base = declarative_base()
 
 class Ticker(Base):
     __tablename__ = 'tickers'
     
     id = Column(Integer, primary_key=True)
-    ts_code = Column(String(20), unique=True, nullable=False)
-    symbol = Column(String(10))
-    name = Column(String(100))
-    area = Column(String(50))
-    industry = Column(String(50))
-    list_date = Column(String(10))
+    ts_code = Column(String(20), nullable=False)  # TS代码
+    symbol = Column(String(10))  # 股票代码
+    name = Column(String(100))  # 股票名称
+    area = Column(String(50))  # 地域
+    industry = Column(String(50))  # 所属行业
+    list_date = Column(String(10))  # 上市日期
     updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationship
@@ -31,6 +49,7 @@ class Ticker(Base):
     cash_flows = relationship("CashFlow", back_populates="ticker")
     income_statements = relationship("IncomeStatement", back_populates="ticker")
     fina_indicators = relationship("FinaIndicator", back_populates="ticker")
+    daily_records = relationship("Daily", back_populates="ticker")
     def __repr__(self):
         return f"<Ticker(ts_code='{self.ts_code}', name='{self.name}')>"
     
@@ -96,19 +115,19 @@ class BalanceSheet(Base):
     __tablename__ = 'balance_sheets'
     
     id = Column(Integer, primary_key=True)
-    ts_code = Column(String(20), ForeignKey('tickers.ts_code'), nullable=False)
-    ann_date = Column(String(10))
-    f_ann_date = Column(String(10))
-    end_date = Column(String(10))
-    report_type = Column(String(10))
-    comp_type = Column(String(10))
-    total_share = Column(Float)
-    cap_rese = Column(Float)
-    undist_profit = Column(Float)
-    surplus_rese = Column(Float)
-    special_rese = Column(Float)
-    money_cap = Column(Float)
-    trad_asset = Column(Float)
+    ts_code = Column(String(20), ForeignKey('tickers.ts_code'), nullable=False)  # TS股票代码
+    ann_date = Column(String(10))  # 公告日期
+    f_ann_date = Column(String(10))  # 实际公告日期
+    end_date = Column(String(10))  # 报告期
+    report_type = Column(String(10))  # 报表类型
+    comp_type = Column(String(10))  # 公司类型(1一般工商业2银行3保险4证券)
+    end_type = Column(String(10))  # 报告期类型
+    total_share = Column(Float)  # 期末总股本
+    cap_rese = Column(Float)  # 资本公积金
+    undistr_porfit = Column(Float)  # 未分配利润
+    surplus_rese = Column(Float)  # 盈余公积金
+    special_rese = Column(Float)  # 专项储备
+    money_cap = Column(Float)  # 货币资金
     notes_receiv = Column(Float)
     accounts_receiv = Column(Float)
     oth_receiv = Column(Float)
@@ -670,7 +689,78 @@ class DcHot(Base):
     ticker_id = Column(Integer, ForeignKey('tickers.id'), nullable=True)
     ticker = relationship("Ticker", back_populates="dc_hots")
 
+class LastDayQuarter(Base):
+    __tablename__ = 'lastday_quarter'
+    
+    id = Column(Integer, primary_key=True)
+    end_date = Column(String(10), nullable=False)
 
+class Daily(Base):
+    __tablename__ = 'daily'
+    
+    id = Column(Integer, primary_key=True)
+    ts_code = Column(String(20), ForeignKey('tickers.ts_code'), nullable=False)
+    trade_date = Column(String(10), nullable=False)
+    open = Column(Float)  # 开盘价
+    high = Column(Float)  # 最高价
+    low = Column(Float)  # 最低价
+    close = Column(Float)  # 收盘价
+    pre_close = Column(Float)  # 昨收价
+    change = Column(Float)  # 涨跌额
+    pct_chg = Column(Float)  # 涨跌幅
+    vol = Column(Float)  # 成交量（手）
+    amount = Column(Float)  # 成交额（千元）
+    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    ticker = relationship("Ticker", back_populates="daily_records")
+
+class AdjFactor(Base):
+    __tablename__ = 'adj_factor'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ts_code = Column(String(20), index=True, nullable=False)
+    trade_date = Column(String(8), index=True, nullable=False)
+    adj_factor = Column(Float, nullable=False)
+    updated_date = Column(DateTime, default=datetime.utcnow)
+
+class Dividend(Base):
+    __tablename__ = 'dividend'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ts_code = Column(String(20), index=True, nullable=False)         # TS代码
+    end_date = Column(String(10), nullable=False)                    # 分送年度
+    ann_date = Column(String(10))                                    # 预案公告日（董事会）
+    div_proc = Column(String(20))                                    # 实施进度
+    stk_div = Column(Float)                                          # 每股送转
+    stk_bo_rate = Column(Float)                                      # 每股送股比例
+    stk_co_rate = Column(Float)                                      # 每股转增比例
+    cash_div = Column(Float)                                         # 每股分红（税后）
+    cash_div_tax = Column(Float)                                     # 每股分红（税前）
+    record_date = Column(String(10))                                 # 股权登记日
+    ex_date = Column(String(10))                                     # 除权除息日
+    pay_date = Column(String(10))                                    # 派息日
+    div_listdate = Column(String(10))                                # 红股上市日
+    imp_ann_date = Column(String(10))                                # 实施公告日
+    base_date = Column(String(10))                                   # 基准日
+    base_share = Column(Float)                                       # 实施基准股本（万）
+    update_flag = Column(String(5))                                  # 是否变更过（1表示变更）
+    updated_date = Column(DateTime, default=datetime.utcnow)   
+    
+class IndexDaily(Base):
+    __tablename__ = 'index_daily'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ts_code = Column(String(20), index=True, nullable=False)         # 指数代码
+    trade_date = Column(String(8), index=True, nullable=False)       # 交易日期
+    close = Column(Float)                                            # 收盘点位
+    open = Column(Float)                                             # 开盘点位
+    high = Column(Float)                                             # 最高点位
+    low = Column(Float)                                              # 最低点位
+    pre_close = Column(Float)                                        # 昨日收盘点位
+    change = Column(Float)                                           # 涨跌点
+    pct_chg = Column(Float)                                          # 涨跌幅
+    vol = Column(Float)                                              # 成交量（手）
+    amount = Column(Float)                                           # 成交额（千元）
+    updated_date = Column(DateTime, default=datetime.utcnow)         # 更新时间
+      # 更新时间
 # Database setup
 def get_engine():
     database_url = os.getenv('DATABASE_URL', 'sqlite:///database/insightofstock.db')
@@ -717,7 +807,7 @@ def create_tables():
                 ts_name, 
                 'THS' AS Security_name 
             FROM ths_hot 
-            WHERE data_type='热股' AND date(substr(trade_date,1,4)||'-'||substr(trade_date,5,2)||'-'||substr(trade_date,7,2))>=date('now','-7 days');
+            WHERE data_type='热股' AND date(substr(trade_date,1,4)||'-'||substr(trade_date,5,2)||'-'||substr(trade_date,7,2))>=date('now','-7 days')
             UNION
             SELECT 
                 trade_date, 

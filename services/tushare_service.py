@@ -1,6 +1,6 @@
 import os
 import tushare as ts
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -52,11 +52,14 @@ class TushareService:
         try:
             # Get the latest report date
             end_date = datetime.now().strftime('%Y%m%d')
+            start_date = datetime.now() - timedelta(days=365) 
             
+            start_date = start_date.strftime('%Y%m%d')
             # Get top 10 individual holders (流通股东)
             df = self.pro.top10_floatholders(
                 ts_code=ts_code,
-                end_date='',
+                end_date=end_date,
+                # start_date=start_date,
                 fields='ts_code,ann_date,end_date,holder_name,hold_amount,hold_ratio,holder_type,hold_change'
             )
             
@@ -779,6 +782,8 @@ class TushareService:
         try:
             df = self.pro.daily_basic(
                 ts_code=ts_code,
+                start_date = start_date,
+                end_date=end_date,
                 fields=fields if fields else 'ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pb,total_share,float_share,free_share,total_mv,circ_mv'
             )
             if df.empty:
@@ -804,14 +809,14 @@ class TushareService:
             print(f"Error fetching daily_basic: {e}")
             return []
 
-    def get_ths_hot(self, **kwargs):
+    def get_ths_hot(self, trade_date=''):
         """
         Fetch ths_hot (同花顺热点) data from Tushare.
         API: https://tushare.pro/document/2?doc_id=320
         """
         try:
             df = self.pro.ths_hot(
-                **kwargs,
+                trade_date=trade_date,
                 fields="trade_date,data_type,ts_code,ts_name,rank,pct_change,current_price,concept,rank_reason,hot,rank_time"
             )
             if df.empty:
@@ -836,7 +841,7 @@ class TushareService:
             print(f"Error fetching ths_hot: {e}")
             return []
 
-    def get_dc_hot(self, **kwargs):
+    def get_dc_hot(self, trade_date=''):
         """
         Fetch dc_hot (东方财富热点) data from Tushare.
         API: https://tushare.pro/document/2?doc_id=321
@@ -844,7 +849,7 @@ class TushareService:
         """
         try:
             df = self.pro.dc_hot(
-                **kwargs,
+                trade_date=trade_date,
                 fields="trade_date,data_type,ts_code,ts_name,rank,pct_change,current_price,concept,hot,rank_time"
             )
             if df.empty:
@@ -867,6 +872,142 @@ class TushareService:
         except Exception as e:
             print(f"Error fetching dc_hot: {e}")
             return []
+        
+    def get_daily(self, ts_code='', start_date='', end_date='', fields=''):
+        """
+        Get daily quotes data from Tushare
+        Reference: https://tushare.pro/document/2?doc_id=27
+        """
+        try:
+            df = self.pro.daily(
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+                fields=fields if fields else 'ts_code,trade_date,open,high,low,close,pre_close,change,pct_chg,vol,amount'
+            )
+            if df.empty:
+                return []
+            
+            daily_data = []
+            for _, row in df.iterrows():
+                daily_data.append({
+                    'ts_code': row['ts_code'],
+                    'trade_date': str(row['trade_date']) if pd.notna(row['trade_date']) else '',
+                    'open': float(row['open']) if pd.notna(row.get('open')) else 0.0,
+                    'high': float(row['high']) if pd.notna(row.get('high')) else 0.0,
+                    'low': float(row['low']) if pd.notna(row.get('low')) else 0.0,
+                    'close': float(row['close']) if pd.notna(row.get('close')) else 0.0,
+                    'pre_close': float(row['pre_close']) if pd.notna(row.get('pre_close')) else 0.0,
+                    'change': float(row['change']) if pd.notna(row.get('change')) else 0.0,
+                    'pct_chg': float(row['pct_chg']) if pd.notna(row.get('pct_chg')) else 0.0,
+                    'vol': float(row['vol']) if pd.notna(row.get('vol')) else 0.0,
+                    'amount': float(row['amount']) if pd.notna(row.get('amount')) else 0.0
+                })
+            return daily_data
+        except Exception as e:
+            print(f"Error fetching daily data: {e}")
+            return []
+    
+    def get_adj_factor(self, ts_code='', trade_date=''):
+        """
+            Get adjustment factor data from Tushare
+            Reference: https://tushare.pro/document/2?doc_id=28
+        """
+        try:
+            df = self.pro.adj_factor(
+                ts_code=ts_code,
+                trade_date=trade_date,
+                fields='ts_code,trade_date,adj_factor'
+            )
+            if df.empty:
+                return []
+            adj_factor_data = []
+            for _, row in df.iterrows():
+                adj_factor_data.append({
+                    'ts_code': row['ts_code'],
+                    'trade_date': str(row['trade_date']) if pd.notna(row['trade_date']) else '',
+                    'adj_factor': float(row['adj_factor']) if pd.notna(row.get('adj_factor')) else 0.0
+                })
+            return adj_factor_data
+        except Exception as e:
+            print(f"Error fetching adj_factor: {e}")
+            return []
+
+    def get_dividend(self, ts_code='', start_date='', end_date=''):
+        """
+        Get dividend data from Tushare
+        Reference: https://tushare.pro/document/2?doc_id=27
+        """
+        try:
+            df = self.pro.dividend(
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+                div_proc='实施',
+                fields='ts_code,end_date,ann_date,div_proc,stk_div,stk_bo_rate,stk_co_rate,cash_div,cash_div_tax,record_date,ex_date,pay_date,div_listdate,imp_ann_date,base_date,base_share,update_flag'
+            )
+            if df.empty:
+                return []
+            dividend_data = []
+            for _, row in df.iterrows():
+                dividend_data.append({
+                    'ts_code': row['ts_code'],
+                    'end_date': row['end_date'],
+                    'ann_date': row.get('ann_date'),
+                    'div_proc': row.get('div_proc'),
+                    'stk_div': row.get('stk_div'),
+                    'stk_bo_rate': row.get('stk_bo_rate'),
+                    'stk_co_rate': row.get('stk_co_rate'),
+                    'cash_div': row.get('cash_div'),
+                    'cash_div_tax': row.get('cash_div_tax'),
+                    'record_date': row.get('record_date'),
+                    'ex_date': row.get('ex_date'),
+                    'pay_date': row.get('pay_date'),
+                    'div_listdate': row.get('div_listdate'),
+                    'imp_ann_date': row.get('imp_ann_date'),
+                    'base_date': row.get('base_date'),
+                    'base_share': row.get('base_share'),
+                    'update_flag': row.get('update_flag')
+                })
+            return dividend_data
+        except Exception as e:
+            print(f"Error fetching dividend: {e}")
+            return []
+
+    def get_index_daily(self, ts_code='000300.SH', start_date='', end_date=''):
+        """
+        Get daily index data from Tushare for benchmark index (recent 360 days)
+        Reference: https://tushare.pro/document/2?doc_id=95
+        """
+        try:
+            df = self.pro.index_daily(
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+                fields='ts_code,trade_date,close,open,high,low,pre_close,change,pct_chg,vol,amount'
+            )
+            if df.empty:
+                return []
+            index_daily_data = []
+            for _, row in df.iterrows():
+                index_daily_data.append({
+                    'ts_code': row['ts_code'],
+                    'trade_date': str(row['trade_date']),
+                    'close': row.get('close'),
+                    'open': row.get('open'),
+                    'high': row.get('high'),
+                    'low': row.get('low'),
+                    'pre_close': row.get('pre_close'),
+                    'change': row.get('change'),
+                    'pct_chg': row.get('pct_chg'),
+                    'vol': row.get('vol'),
+                    'amount': row.get('amount')
+                })
+            return index_daily_data
+        except Exception as e:
+            print(f"Error fetching index_daily: {e}")
+            return []
+
 
 if __name__ == "__main__":
     # Test the service

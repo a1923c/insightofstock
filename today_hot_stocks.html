@@ -1,0 +1,892 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今日热门股票 - Venn图展示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .venn-container {
+            position: relative;
+            width: 800px;
+            height: 500px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .circle {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            overflow: hidden;
+        }
+        
+        .circle-left {
+            left: 100px;
+            background: radial-gradient(circle at 30% 30%, 
+                rgba(255, 99, 132, 0.8) 0%, 
+                rgba(255, 99, 132, 0.4) 50%, 
+                rgba(255, 99, 132, 0.1) 100%);
+            animation: fadeInLeft 1s ease-out;
+        }
+        
+        .circle-right {
+            right: 100px;
+            background: radial-gradient(circle at 70% 30%, 
+                rgba(54, 162, 235, 0.8) 0%, 
+                rgba(54, 162, 235, 0.4) 50%, 
+                rgba(54, 162, 235, 0.1) 100%);
+            animation: fadeInRight 1s ease-out;
+        }
+        
+        .intersection {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 50%, 
+                rgba(255, 206, 86, 0.9) 0%, 
+                rgba(255, 206, 86, 0.6) 50%, 
+                rgba(255, 206, 86, 0.3) 100%);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            animation: pulse 2s ease-in-out infinite;
+            z-index: 10;
+        }
+        
+        .stock-item {
+            background: rgba(255, 255, 255, 0.9);
+            margin: 5px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            max-width: 150px;
+            text-align: center;
+        }
+        
+        .stock-item:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            background: rgba(255, 255, 255, 1);
+        }
+        
+        .stock-code {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .stock-name {
+            color: #666;
+            font-size: 11px;
+        }
+        
+        .stock-change {
+            font-size: 10px;
+            color: #e74c3c;
+        }
+        
+        .circle-label {
+            position: absolute;
+            top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .modal h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .modal-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes fadeInRight {
+            from {
+                opacity: 0;
+                transform: translateX(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.8;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.05);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.8;
+            }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .legend {
+            text-align: center;
+            margin-top: 40px;
+            color: white;
+        }
+        
+        .legend-item {
+            display: inline-block;
+            margin: 0 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .legend-ths {
+            background: rgba(255, 99, 132, 0.8);
+            color: white;
+        }
+        
+        .legend-dc {
+            background: rgba(54, 162, 235, 0.8);
+            color: white;
+        }
+        
+        .legend-intersection {
+            background: rgba(255, 206, 86, 0.9);
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>今日热门股票 Venn图</h1>
+        
+        <div class="venn-container">
+            <div class="circle circle-left">
+                <div class="circle-label">THS 热门</div>
+                
+                <div class="stock-item" 
+                     data-code="601606.SH" 
+                     data-name="长城军工" 
+                     data-price="67.82" 
+                     data-change="10.01" 
+                     data-hot="1183455.0" 
+                     data-concept="["兵装重组概念", "军民融合"]">
+                    <div class="stock-code">601606.SH</div>
+                    <div class="stock-name">长城军工</div>
+                    <div class="stock-change">+10.01%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="000066.SZ" 
+                     data-name="中国长城" 
+                     data-price="17.50" 
+                     data-change="9.99" 
+                     data-hot="712392.0" 
+                     data-concept="["国产操作系统", "东数西算(算力)"]">
+                    <div class="stock-code">000066.SZ</div>
+                    <div class="stock-name">中国长城</div>
+                    <div class="stock-change">+9.99%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="601138.SH" 
+                     data-name="工业富联" 
+                     data-price="43.68" 
+                     data-change="10.00" 
+                     data-hot="703480.0" 
+                     data-concept="["同花顺果指数", "液冷服务器"]">
+                    <div class="stock-code">601138.SH</div>
+                    <div class="stock-name">工业富联</div>
+                    <div class="stock-change">+10.00%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="601929.SH" 
+                     data-name="吉视传媒" 
+                     data-price="3.60" 
+                     data-change="10.09" 
+                     data-hot="587522.0" 
+                     data-concept="["IP经济(谷子经济)", "旅游概念"]">
+                    <div class="stock-code">601929.SH</div>
+                    <div class="stock-name">吉视传媒</div>
+                    <div class="stock-change">+10.09%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600410.SH" 
+                     data-name="华胜天成" 
+                     data-price="16.19" 
+                     data-change="3.65" 
+                     data-hot="548518.0" 
+                     data-concept="["信创", "东数西算(算力)"]">
+                    <div class="stock-code">600410.SH</div>
+                    <div class="stock-name">华胜天成</div>
+                    <div class="stock-change">+3.65%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600619.SH" 
+                     data-name="海立股份" 
+                     data-price="25.28" 
+                     data-change="10.01" 
+                     data-hot="527468.0" 
+                     data-concept="["光刻机", "芯片概念"]">
+                    <div class="stock-code">600619.SH</div>
+                    <div class="stock-name">海立股份</div>
+                    <div class="stock-change">+10.01%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002104.SZ" 
+                     data-name="恒宝股份" 
+                     data-price="24.56" 
+                     data-change="9.99" 
+                     data-hot="514950.0" 
+                     data-concept="["电子身份证", "数字货币"]">
+                    <div class="stock-code">002104.SZ</div>
+                    <div class="stock-name">恒宝股份</div>
+                    <div class="stock-change">+9.99%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600203.SH" 
+                     data-name="福日电子" 
+                     data-price="19.07" 
+                     data-change="9.98" 
+                     data-hot="509103.0" 
+                     data-concept="["华为手机", "无人机"]">
+                    <div class="stock-code">600203.SH</div>
+                    <div class="stock-name">福日电子</div>
+                    <div class="stock-change">+9.98%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002611.SZ" 
+                     data-name="东方精工" 
+                     data-price="18.98" 
+                     data-change="10.03" 
+                     data-hot="509064.0" 
+                     data-concept="["人形机器人", "新型工业化"]">
+                    <div class="stock-code">002611.SZ</div>
+                    <div class="stock-name">东方精工</div>
+                    <div class="stock-change">+10.03%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002097.SZ" 
+                     data-name="山河智能" 
+                     data-price="19.32" 
+                     data-change="6.21" 
+                     data-hot="453758.0" 
+                     data-concept="["雅下水电概念", "航空发动机"]">
+                    <div class="stock-code">002097.SZ</div>
+                    <div class="stock-name">山河智能</div>
+                    <div class="stock-change">+6.21%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002148.SZ" 
+                     data-name="北纬科技" 
+                     data-price="12.60" 
+                     data-change="10.04" 
+                     data-hot="426634.0" 
+                     data-concept="["机器人概念", "无人机"]">
+                    <div class="stock-code">002148.SZ</div>
+                    <div class="stock-name">北纬科技</div>
+                    <div class="stock-change">+10.04%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600967.SH" 
+                     data-name="内蒙一机" 
+                     data-price="28.86" 
+                     data-change="9.98" 
+                     data-hot="371115.0" 
+                     data-concept="["军民融合", "军工"]">
+                    <div class="stock-code">600967.SH</div>
+                    <div class="stock-name">内蒙一机</div>
+                    <div class="stock-change">+9.98%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="000901.SZ" 
+                     data-name="航天科技" 
+                     data-price="21.07" 
+                     data-change="10.03" 
+                     data-hot="370801.0" 
+                     data-concept="["军民融合", "卫星导航"]">
+                    <div class="stock-code">000901.SZ</div>
+                    <div class="stock-name">航天科技</div>
+                    <div class="stock-change">+10.03%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002173.SZ" 
+                     data-name="创新医疗" 
+                     data-price="22.65" 
+                     data-change="10.00" 
+                     data-hot="345230.0" 
+                     data-concept="["脑机接口", "高压氧舱"]">
+                    <div class="stock-code">002173.SZ</div>
+                    <div class="stock-name">创新医疗</div>
+                    <div class="stock-change">+10.00%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600366.SH" 
+                     data-name="宁波韵升" 
+                     data-price="15.74" 
+                     data-change="9.99" 
+                     data-hot="333632.0" 
+                     data-concept="["稀土永磁", "小金属概念"]">
+                    <div class="stock-code">600366.SH</div>
+                    <div class="stock-name">宁波韵升</div>
+                    <div class="stock-change">+9.99%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002298.SZ" 
+                     data-name="中电鑫龙" 
+                     data-price="9.42" 
+                     data-change="10.05" 
+                     data-hot="329788.0" 
+                     data-concept="["东数西算(算力)", "数据安全"]">
+                    <div class="stock-code">002298.SZ</div>
+                    <div class="stock-name">中电鑫龙</div>
+                    <div class="stock-change">+10.05%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="601609.SH" 
+                     data-name="金田股份" 
+                     data-price="9.41" 
+                     data-change="10.06" 
+                     data-hot="310664.0" 
+                     data-concept="["金属回收", "金属铜"]">
+                    <div class="stock-code">601609.SH</div>
+                    <div class="stock-name">金田股份</div>
+                    <div class="stock-change">+10.06%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="603767.SH" 
+                     data-name="中马传动" 
+                     data-price="35.09" 
+                     data-change="10.00" 
+                     data-hot="308468.0" 
+                     data-concept="["减速器", "农机"]">
+                    <div class="stock-code">603767.SH</div>
+                    <div class="stock-name">中马传动</div>
+                    <div class="stock-change">+10.00%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="300502.SZ" 
+                     data-name="新易盛" 
+                     data-price="236.56" 
+                     data-change="15.45" 
+                     data-hot="306904.0" 
+                     data-concept="["共封装光学(CPO)", "中国AI 50"]">
+                    <div class="stock-code">300502.SZ</div>
+                    <div class="stock-name">新易盛</div>
+                    <div class="stock-change">+15.45%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002549.SZ" 
+                     data-name="凯美特气" 
+                     data-price="15.02" 
+                     data-change="10.04" 
+                     data-hot="301301.0" 
+                     data-concept="["光刻胶", "光刻机"]">
+                    <div class="stock-code">002549.SZ</div>
+                    <div class="stock-name">凯美特气</div>
+                    <div class="stock-change">+10.04%</div>
+                </div>
+            
+            </div>
+            
+            <div class="circle circle-right">
+                <div class="circle-label">DC 热门</div>
+                
+                <div class="stock-item" 
+                     data-code="603273.SH" 
+                     data-name="天元智能" 
+                     data-price="21.80" 
+                     data-change="9.99" 
+                     data-hot="100.0" 
+                     data-concept="None">
+                    <div class="stock-code">603273.SH</div>
+                    <div class="stock-name">天元智能</div>
+                    <div class="stock-change">+9.99%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="430476.BJ" 
+                     data-name="海能技术" 
+                     data-price="19.79" 
+                     data-change="3.94" 
+                     data-hot="100.0" 
+                     data-concept="None">
+                    <div class="stock-code">430476.BJ</div>
+                    <div class="stock-name">海能技术</div>
+                    <div class="stock-change">+3.94%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002454.SZ" 
+                     data-name="松芝股份" 
+                     data-price="9.59" 
+                     data-change="9.98" 
+                     data-hot="99.0" 
+                     data-concept="None">
+                    <div class="stock-code">002454.SZ</div>
+                    <div class="stock-name">松芝股份</div>
+                    <div class="stock-change">+9.98%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002208.SZ" 
+                     data-name="合肥城建" 
+                     data-price="7.23" 
+                     data-change="3.73" 
+                     data-hot="99.0" 
+                     data-concept="None">
+                    <div class="stock-code">002208.SZ</div>
+                    <div class="stock-name">合肥城建</div>
+                    <div class="stock-change">+3.73%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="300750.SZ" 
+                     data-name="宁德时代" 
+                     data-price="273.60" 
+                     data-change="3.93" 
+                     data-hot="98.0" 
+                     data-concept="None">
+                    <div class="stock-code">300750.SZ</div>
+                    <div class="stock-name">宁德时代</div>
+                    <div class="stock-change">+3.93%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="301231.SZ" 
+                     data-name="荣信文化" 
+                     data-price="26.18" 
+                     data-change="1.99" 
+                     data-hot="98.0" 
+                     data-concept="None">
+                    <div class="stock-code">301231.SZ</div>
+                    <div class="stock-name">荣信文化</div>
+                    <div class="stock-change">+1.99%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002108.SZ" 
+                     data-name="沧州明珠" 
+                     data-price="3.98" 
+                     data-change="9.94" 
+                     data-hot="97.0" 
+                     data-concept="None">
+                    <div class="stock-code">002108.SZ</div>
+                    <div class="stock-name">沧州明珠</div>
+                    <div class="stock-change">+9.94%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600959.SH" 
+                     data-name="江苏有线" 
+                     data-price="3.68" 
+                     data-change="2.22" 
+                     data-hot="97.0" 
+                     data-concept="None">
+                    <div class="stock-code">600959.SH</div>
+                    <div class="stock-name">江苏有线</div>
+                    <div class="stock-change">+2.22%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002975.SZ" 
+                     data-name="博杰股份" 
+                     data-price="48.40" 
+                     data-change="10.00" 
+                     data-hot="96.0" 
+                     data-concept="None">
+                    <div class="stock-code">002975.SZ</div>
+                    <div class="stock-name">博杰股份</div>
+                    <div class="stock-change">+10.00%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="688181.SH" 
+                     data-name="八亿时空" 
+                     data-price="35.90" 
+                     data-change="7.74" 
+                     data-hot="96.0" 
+                     data-concept="None">
+                    <div class="stock-code">688181.SH</div>
+                    <div class="stock-name">八亿时空</div>
+                    <div class="stock-change">+7.74%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600113.SH" 
+                     data-name="浙江东日" 
+                     data-price="43.68" 
+                     data-change="10.00" 
+                     data-hot="95.0" 
+                     data-concept="None">
+                    <div class="stock-code">600113.SH</div>
+                    <div class="stock-name">浙江东日</div>
+                    <div class="stock-change">+10.00%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="688506.SH" 
+                     data-name="百利天恒" 
+                     data-price="312.56" 
+                     data-change="5.51" 
+                     data-hot="95.0" 
+                     data-concept="None">
+                    <div class="stock-code">688506.SH</div>
+                    <div class="stock-name">百利天恒</div>
+                    <div class="stock-change">+5.51%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="600601.SH" 
+                     data-name="方正科技" 
+                     data-price="6.45" 
+                     data-change="7.14" 
+                     data-hot="94.0" 
+                     data-concept="None">
+                    <div class="stock-code">600601.SH</div>
+                    <div class="stock-name">方正科技</div>
+                    <div class="stock-change">+7.14%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="300462.SZ" 
+                     data-name="ST华铭" 
+                     data-price="10.48" 
+                     data-change="3.56" 
+                     data-hot="94.0" 
+                     data-concept="None">
+                    <div class="stock-code">300462.SZ</div>
+                    <div class="stock-name">ST华铭</div>
+                    <div class="stock-change">+3.56%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="300065.SZ" 
+                     data-name="海兰信" 
+                     data-price="19.12" 
+                     data-change="5.64" 
+                     data-hot="93.0" 
+                     data-concept="None">
+                    <div class="stock-code">300065.SZ</div>
+                    <div class="stock-name">海兰信</div>
+                    <div class="stock-change">+5.64%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="300408.SZ" 
+                     data-name="三环集团" 
+                     data-price="40.66" 
+                     data-change="15.51" 
+                     data-hot="93.0" 
+                     data-concept="None">
+                    <div class="stock-code">300408.SZ</div>
+                    <div class="stock-name">三环集团</div>
+                    <div class="stock-change">+15.51%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="002052.SZ" 
+                     data-name="同洲电子" 
+                     data-price="13.16" 
+                     data-change="10.03" 
+                     data-hot="92.0" 
+                     data-concept="None">
+                    <div class="stock-code">002052.SZ</div>
+                    <div class="stock-name">同洲电子</div>
+                    <div class="stock-change">+10.03%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="003006.SZ" 
+                     data-name="百亚股份" 
+                     data-price="29.00" 
+                     data-change="6.42" 
+                     data-hot="92.0" 
+                     data-concept="None">
+                    <div class="stock-code">003006.SZ</div>
+                    <div class="stock-name">百亚股份</div>
+                    <div class="stock-change">+6.42%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="605169.SH" 
+                     data-name="洪通燃气" 
+                     data-price="19.77" 
+                     data-change="10.02" 
+                     data-hot="91.0" 
+                     data-concept="None">
+                    <div class="stock-code">605169.SH</div>
+                    <div class="stock-name">洪通燃气</div>
+                    <div class="stock-change">+10.02%</div>
+                </div>
+            
+
+                <div class="stock-item" 
+                     data-code="605333.SH" 
+                     data-name="沪光股份" 
+                     data-price="35.78" 
+                     data-change="4.68" 
+                     data-hot="91.0" 
+                     data-concept="None">
+                    <div class="stock-code">605333.SH</div>
+                    <div class="stock-name">沪光股份</div>
+                    <div class="stock-change">+4.68%</div>
+                </div>
+            
+            </div>
+            
+            <div class="intersection">
+                <div class="circle-label">双重热门</div>
+                
+            </div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item legend-ths">THS: 同花顺热门股票</div>
+            <div class="legend-item legend-dc">DC: 东方财富热门股票</div>
+            <div class="legend-item legend-intersection">交集: 双重热门股票</div>
+        </div>
+    </div>
+    
+    <!-- Modal -->
+    <div id="stockModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle">股票详情</h2>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Modal functionality
+        const modal = document.getElementById('stockModal');
+        const closeBtn = document.getElementsByClassName('close')[0];
+        
+        function showModal(stockData) {
+            document.getElementById('modalTitle').textContent = `${stockData.name} (${stockData.code})`;
+            
+            let content = `
+                <div class="modal-info">
+                    <strong>当前价格:</strong> ¥${stockData.price}
+                </div>
+                <div class="modal-info">
+                    <strong>涨跌幅:</strong> <span style="color: ${(stockData.change >= 0) ? '#e74c3c' : '#27ae60'}">${stockData.change}%</span>
+                </div>
+                <div class="modal-info">
+                    <strong>热度值:</strong> ${stockData.hot}
+                </div>
+                <div class="modal-info">
+                    <strong>概念标签:</strong> ${stockData.concept}
+                </div>
+                <div class="modal-info">
+                    <strong>更新时间:</strong> ${(new Date()).toLocaleString('zh-CN')}
+                </div>
+            `;
+            
+            document.getElementById('modalBody').innerHTML = content;
+            modal.style.display = 'block';
+        }
+        
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        }
+        
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        // Add click handlers to stock items
+        document.querySelectorAll('.stock-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const stockData = {
+                    code: this.dataset.code,
+                    name: this.dataset.name,
+                    price: this.dataset.price,
+                    change: this.dataset.change,
+                    hot: this.dataset.hot,
+                    concept: this.dataset.concept
+                };
+                showModal(stockData);
+            });
+        });
+        
+        // Add hover effects
+        document.querySelectorAll('.circle').forEach(circle => {
+            circle.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(1.02)';
+            });
+            
+            circle.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+</body>
+</html>
